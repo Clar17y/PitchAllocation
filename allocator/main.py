@@ -20,7 +20,20 @@ def main():
     
     allocator = Allocator(pitches, teams, allocation_config, args.start_time, args.end_time)
     allocator.allocate()
-    allocator.save_allocations('output/allocations_week1.txt')
+    # Get the date from the allocation_config
+    allocation_date = allocation_config.get('date')
+    
+    if allocation_date:
+        # Format the date to be used in the filename
+        formatted_date = allocation_date.replace('-', '')
+        output_filename = f'output/allocations_{formatted_date}.txt'
+    else:
+        # Fallback to a default filename if date is not available
+        logger.warning("Date not found in allocation config. Using default filename.")
+        output_filename = 'output/allocations_default.txt'
+    
+    # Save the allocations using the new filename
+    allocator.save_allocations(output_filename)
 
 if __name__ == "__main__":
     main()
