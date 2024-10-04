@@ -1,100 +1,100 @@
 {
     "pitches": [
         {
-            "name": "Hawes Down Top Left (5)",
-            "code": "A",
+            "id": 1,
+            "name": "Hawes Down Top Left",
             "location": "HD TL",
             "capacity": 5,
             "overlaps_with": []
         },
         {
-            "name": "Hawes Down Bottom Left (5)",
-            "code": "B",
+            "id": 2,
+            "name": "Hawes Down Bottom Left",
             "location": "HD BL",
             "capacity": 5,
             "overlaps_with": []
         },
         {
-            "name": "Hawes Down Bottom Right (5)",
-            "code": "C",
+            "id": 3,
+            "name": "Hawes Down Bottom Right",
             "location": "HD BR",
             "capacity": 5,
             "overlaps_with": []
         },
         {
-            "name": "Hawes Down Top Left (7)",
-            "code": "D",
+            "id": 4,
+            "name": "Hawes Down Top Left",
             "location": "HD TL",
             "capacity": 7,
-            "overlaps_with": ["HDL"]
+            "overlaps_with": [10]
         },
         {
-            "name": "Hawes Down Top Right (7)",
-            "code": "E",
+            "id": 5,
+            "name": "Hawes Down Top Right",
             "location": "HD TR",
             "capacity": 7,
-            "overlaps_with": ["HDR"]
+            "overlaps_with": [11]
         },
-        {
-            "name": "Hawes Down Bottom Right (7)",
-            "code": "F",
+        {   
+            "id": 6,
+            "name": "Hawes Down Bottom Right",
             "location": "HD BR",
             "capacity": 7,
-            "overlaps_with": ["HDR"]
+            "overlaps_with": [11]
         },
         {
+            "id": 7,
             "name": "Hawes Down Left (9)",
-            "code": "G",
             "location": "HD Left",
             "capacity": 9,
-            "overlaps_with": ["HDL"]
+            "overlaps_with": [10]
         },
         {
-            "name": "Hayes Left (9)",
-            "code": "H",
+            "id": 8,
+            "name": "Hayes Left",
             "location": "Hayes Left",
             "capacity": 9,
-            "overlaps_with": ["HL"]
+            "overlaps_with": [12]
         },
         {
-            "name": "LA Annex (9)",
-            "code": "LA",
+            "id": 9,
+            "name": "LA Annex",
             "location": "LA Annex",
             "capacity": 9,
             "cost": 1,
             "overlaps_with": []
         },
         {
-            "name": "Hawes Down Left (11)",
-            "code": "HDL",
+            "id": 10,
+            "name": "Hawes Down Left",
             "location": "HD Left",
             "capacity": 11,
-            "overlaps_with": ["D", "G"]
+            "overlaps_with": [4, 7]
         },
         {
-            "name": "Hawes Down Right (11)",
-            "code": "HDR",
+            "id": 11,
+            "name": "Hawes Down Right",
             "location": "HD Right",
             "capacity": 11,
-            "overlaps_with": ["E", "F"]
+            "overlaps_with": [5, 6]
         },
         {
-            "name": "Hayes Left (11)",
-            "code": "HL",
+            "id": 12,
+            "name": "Hayes Left",
             "location": "Hayes Left",
             "capacity": 11,
-            "overlaps_with": ["H"]
+            "overlaps_with": [8]
         },
         {
-            "name": "Hayes Right (11)",
-            "code": "HR",
+            "id": 13,
+            "name": "Hayes Right",
             "location": "Hayes Right",
             "capacity": 11,
             "overlaps_with": []
         },
         {
-            "name": "Charles Darwin School (11)",
-            "code": "CDS",
+            "id": 14,
+            "name": "Charles Darwin School",
             "location": "Charles Darwin School",
             "capacity": 11,
             "cost": 1,

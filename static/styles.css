@@ -41,6 +41,9 @@ h1, h3, h5 {
     .input-group .form-select {
         flex: 1 1 auto;
     }
+    .input-group .form-select-config {
+        flex: 1 1 auto;
+    }
     .input-group .input-group-text {
         flex: 0 0 auto;
     }
@@ -61,6 +64,10 @@ h1, h3, h5 {
     }
 
     .form-select {
+        font-size: 0.85rem;
+    }
+
+    .form-select-config {
         font-size: 0.85rem;
     }
 
@@ -99,6 +106,12 @@ h1, h3, h5 {
     max-width: 80px;
 }
 
+/* Set a minimum width for the config dropdowns */
+.form-select-config {
+    min-width: 160px;
+    max-width: 240px;
+}
+
 /* Preferred Time Highlight */
 .preferred-time {
     background-color: #d4edda !important; /* Light green background */
@@ -117,4 +130,9 @@ h1, h3, h5 {
 
 table {
     white-space: nowrap;
+}
+
+input[readonly] {
+    background-color: #e9ecef;
+    cursor: not-allowed;
 }

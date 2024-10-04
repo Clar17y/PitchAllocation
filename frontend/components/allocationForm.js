@@ -1,32 +1,40 @@
 // frontend/components/allocationForm.js
 
 import { fetchTeams, fetchPitches, submitAllocation } from '../api/api.js';
+import { groupTeamsByAgeGroup, generateTimeOptions } from '../utils/helpers.js';
 import { logMessage } from '../utils/logger.js';
-import { generateTimeOptions, groupTeamsByAgeGroup } from '../utils/helpers.js';
 import { getCookie } from '../utils/cookie.js';
 
-let teamsList = [];
-let pitchesList = [];
 let currentUsername = '';
 
-export function initializeFormComponents(username) {
+/**
+ * Initialize Allocation Form
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    const username = getCookie('username');
+    if (!username) {
+        alert('User not logged in. Redirecting to login.');
+        location.href = '/';
+        return;
+    }
+});
+
+export async function initializeFormComponents(username) {
     currentUsername = username;
     populateNextSunday();
     populateStartTime();
     populateEndTime();
-    fetchTeams()
-        .then(data => {
-            teamsList = data;
-            populateTeams();
-        })
-        .catch(error => logMessage(error.message, 'error'));
+    try {
+        const [pitchesData, teamsData] = await Promise.all([
+            fetchPitches(username),
+            fetchTeams(username)
+        ]);
 
-    fetchPitches()
-        .then(data => {
-            pitchesList = data;
-            populatePitches();
-        })
-        .catch(error => logMessage(error.message, 'error'));
+        populatePitches(pitchesData.pitches);
+        populateTeams(teamsData.teams);
+    } catch (error) {
+        logMessage(error.message, 'error');
+    }
 
     document.getElementById('allocation-form').addEventListener('submit', function(event) {
         event.preventDefault();
@@ -69,12 +77,60 @@ function populateEndTime() {
     endHourSelect.value = '14';
 }
 
-function populateTeams() {
+/**
+ * Populate Pitches Checkboxes
+ * @param {Array} pitches - List of pitches
+ */
+function populatePitches(pitches) {
+    const container = document.getElementById('pitches-container');
+    container.innerHTML = ''; // Clear existing content
+
+    // Create a row
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    // Determine the column classes based on screen size
+    const colClass = 'col-lg-6 col-md-6 col-sm-12 mb-3';
+
+    // Create a column
+    const col = document.createElement('div');
+    col.className = colClass;
+
+    pitches.forEach((pitch) => {
+        const div = document.createElement('div');
+        div.className = 'form-check d-flex align-items-center mb-2';
+
+        const checkbox = document.createElement('input');
+        checkbox.className = 'form-check-input me-2';
+        checkbox.type = 'checkbox';
+        checkbox.id = `pitch-${pitch.id}`;
+        checkbox.value = pitch.id;
+
+        const label = document.createElement('label');
+        label.className = 'form-check-label';
+        label.htmlFor = `pitch-${pitch.id}`;
+        label.innerText = `${pitch.format_label}`;
+
+        div.appendChild(checkbox);
+        div.appendChild(label);
+
+        col.appendChild(div);
+    });
+
+    row.appendChild(col);
+    container.appendChild(row);
+}
+
+/**
+ * Populate Teams Checkboxes
+ * @param {Array} teams - List of teams
+ */
+function populateTeams(teams) {
     const container = document.getElementById('teams-container');
     container.innerHTML = ''; // Clear existing content
 
     // Group teams by age group
-    const teamsByAgeGroup = groupTeamsByAgeGroup(teamsList);
+    const teamsByAgeGroup = groupTeamsByAgeGroup(teams);
 
     // Create columns for each age group
     Object.entries(teamsByAgeGroup).forEach(([ageGroup, teams]) => {
@@ -93,17 +149,17 @@ function populateTeams() {
             const checkbox = document.createElement('input');
             checkbox.className = 'form-check-input flex-shrink-0 me-2';
             checkbox.type = 'checkbox';
-            checkbox.id = `team-${team.team_id}`;
-            checkbox.value = team.team_id;
+            checkbox.id = `team-${team.id}`;
+            checkbox.value = team.id;
 
             const label = document.createElement('label');
             label.className = 'form-check-label flex-grow-1 me-2';
-            label.htmlFor = `team-${team.team_id}`;
+            label.htmlFor = `team-${team.id}`;
             label.innerText = team.display_name;
 
             const timeSelect = document.createElement('select');
             timeSelect.className = 'form-select form-select-sm flex-shrink-0';
-            timeSelect.id = `time-${team.team_id}`;
+            timeSelect.id = `time-${team.id}`;
             timeSelect.disabled = true;
 
             // Populate time options
@@ -133,46 +189,6 @@ function populateTeams() {
     });
 }
 
-function populatePitches() {
-    const container = document.getElementById('pitches-container');
-    container.innerHTML = ''; // Clear existing content
-
-    // Create a row
-    const row = document.createElement('div');
-    row.className = 'row';
-
-    // Determine the column classes based on screen size
-    const colClass = 'col-lg-6 col-md-6 col-sm-12 mb-3';
-
-    // Create a column
-    const col = document.createElement('div');
-    col.className = colClass;
-
-    pitchesList.forEach((pitch) => {
-        const div = document.createElement('div');
-        div.className = 'form-check d-flex align-items-center mb-2';
-
-        const checkbox = document.createElement('input');
-        checkbox.className = 'form-check-input me-2';
-        checkbox.type = 'checkbox';
-        checkbox.id = `pitch-${pitch.code}`;
-        checkbox.value = pitch.code;
-
-        const label = document.createElement('label');
-        label.className = 'form-check-label';
-        label.htmlFor = `pitch-${pitch.code}`;
-        label.innerText = `${pitch.format_label}`;
-
-        div.appendChild(checkbox);
-        div.appendChild(label);
-
-        col.appendChild(div);
-    });
-
-    row.appendChild(col);
-    container.appendChild(row);
-}
-
 function validatePayload(payload) {
     if (!payload.date || !payload.start_time || !payload.end_time) {
         alert('Please fill in all required fields.');
@@ -182,14 +198,6 @@ function validatePayload(payload) {
     if (payload.start_time >= payload.end_time) {
         alert('Start time must be before end time.');
         return false;
-    }
-
-    const teamIdRegex = /^[A-Za-z0-9]+-(Girls|Boys)$/;
-    for (let team of payload.teams) {
-        if (!teamIdRegex.test(team.team_id)) {
-            alert(`Invalid team_id format: ${team.team_id}`);
-            return false;
-        }
     }
 
     if (payload.teams.length < 1) {
@@ -217,7 +225,7 @@ function handleSubmitAllocation() {
         const preferredTimeInput = document.getElementById(`time-${teamId}`);
         const preferredTime = preferredTimeInput.value; // Can be empty string if not set
         return {
-            team_id: teamId,
+            id: teamId,
             preferred_time: preferredTime // May be empty
         };
     });
@@ -236,7 +244,7 @@ function handleSubmitAllocation() {
     }
 
     // Check for duplicate teams
-    const selectedTeamIds = payload.teams.map(team => team.team_id);
+    const selectedTeamIds = payload.teams.map(team => team.id);
     const uniqueTeamIds = new Set(selectedTeamIds);
     if (uniqueTeamIds.size !== selectedTeamIds.length) {
         alert('Duplicate teams selected. Please ensure each team is selected only once.');

@@ -4,9 +4,9 @@ from allocator.logger import setup_logger
 logger = setup_logger(__name__)
 
 class Pitch:
-    def __init__(self, name, code, capacity, location, cost=0, overlaps_with=None):
+    def __init__(self, id, name, capacity, location, cost=0, overlaps_with=None):
+        self.id = id
         self.name = name
-        self.code = code
         self.capacity = capacity
         self.location = location
         self.cost = cost
@@ -38,7 +38,7 @@ class Pitch:
         return True
 
     def format_label(self):
-        return f"{self.capacity}aside - {self.location} ({self.code})"
+        return f"{self.capacity}aside - {self.location}"
     
     def reset_matches(self):
         """Reset all scheduled matches."""

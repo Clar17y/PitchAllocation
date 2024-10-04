@@ -17,7 +17,7 @@ class Allocator:
         self.end_time = get_datetime(end_time, config.get('end_time', "14:00"), reference_date)
 
         self.pitch_name_map = self.create_pitch_name_map()
-        self.pitch_code_map = {pitch.code: pitch for pitch in self.pitches}  # Mapping code to Pitch
+        self.pitch_id_map = { pitch.id: pitch for pitch in self.pitches }
 
         # Create separate lists for free and paid pitches
         self.free_pitches = sorted([p for p in self.pitches if p.cost == 0], key=lambda p: p.capacity)
@@ -88,25 +88,16 @@ class Allocator:
 
     def get_team_from_entry(self, team_entry):
         """
-        Extracts the team object from team_entry using 'team_id'.
-        Expected 'team_id' format: "TeamName-Girls" or "TeamName-Boys"
+        Extracts the team object from team_entry using the team's 'id'.
         """
-        team_id = team_entry.get('team_id')
+        team_id = team_entry.get('id')
         if not team_id:
-            logger.error("team_id missing in team_entry.")
+            logger.error("Team ID missing in team_entry.")
             return None
 
-        team_id = team_id.strip()  # Remove any leading/trailing spaces
-        try:
-            name, gender = team_id.rsplit('-', 1)
-            is_girls = gender.lower() == 'girls'
-        except ValueError:
-            logger.error(f"Invalid team_id format: '{team_id}'. Expected format 'TeamName-Girls' or 'TeamName-Boys'.")
-            return None
-
-        team = next((t for t in self.teams if t.name == name and t.is_girls == is_girls), None)
+        team = next((t for t in self.teams if t.id == int(team_id)), None)
         if not team:
-            logger.warning(f"Team '{team_id}' not found in teams list.")
+            logger.warning(f"Team ID '{team_id}' not found in teams list.")
         return team
     
     def get_team_from_name(self, name):
@@ -148,13 +139,14 @@ class Allocator:
     
     def allocate_remaining_teams(self, teams, start_time, end_of_day, specific_pitches=None):
         pitches_to_use = specific_pitches if specific_pitches else self.pitches
+        sorted_pitches = sorted(pitches_to_use, key=lambda p: p.cost)
         # Add unallocated teams from allocate_preferred_teams to teams_to_allocate
         teams_to_allocate = set(teams) | set(self.unallocated_teams)
         # Clear the unallocated_teams list as we're now considering all teams
         self.unallocated_teams = []
         while teams_to_allocate and start_time <= end_of_day:
             allocated_this_slot = False
-            for pitch in pitches_to_use:
+            for pitch in sorted_pitches:
                 if not teams_to_allocate:
                     break
 
@@ -180,9 +172,14 @@ class Allocator:
         if start_time > end_of_day:
             logger.info(f"Cannot schedule {team.format_label()} as it starts after {end_of_day.strftime('%H:%M')}.")
             return False
+        
+        # Sort pitches by cost ascending to prioritize cheaper pitches
+        sorted_pitches = sorted(
+            [specific_pitch] if specific_pitch else self.pitches,
+            key=lambda p: p.cost
+        )
 
-        pitches_to_check = [specific_pitch] if specific_pitch else self.pitches
-        for pitch in pitches_to_check:
+        for pitch in sorted_pitches:
             if pitch.capacity != pitch_type:
                 continue
 
@@ -190,7 +187,7 @@ class Allocator:
                 continue
 
             # Check overlapping pitches
-            overlapping = [self.pitch_code_map[code] for code in pitch.overlaps_with if code in self.pitch_code_map]
+            overlapping = [self.pitch_id_map[pid] for pid in pitch.overlaps_with if pid in self.pitch_id_map]
             overlap_conflict = False
             for overlapping_pitch in overlapping:
                 if overlapping_pitch.is_available(start_time, duration) is False:

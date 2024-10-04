@@ -1,0 +1,299 @@
+<!-- frontend/config.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Configuration</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Include Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        /* Styles for swipe-to-delete functionality */
+        .list-group-item {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .delete-button {
+            position: absolute;
+            top: 0;
+            right: -80px;
+            height: 100%;
+            width: 80px;
+            background-color: #dc3545; /* Bootstrap's danger color */
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: right 0.3s ease;
+            cursor: pointer;
+        }
+
+        .list-group-item.show-delete .delete-button {
+            right: 0;
+        }
+
+        /* Styles for Overlaps With Multi-Select */
+        .multi-select-container {
+            position: relative;
+        }
+        
+        .selected-overlaps {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 5px;
+            border: 1px solid #ced4da;
+            border-radius: 0.25rem;
+            min-height: 38px;
+            cursor: text;
+        }
+
+        .selected-overlaps input {
+            border: none;
+            outline: none;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .selected-overlaps .badge {
+            display: flex;
+            align-items: center;
+            padding-right: 0.5rem;
+        }
+
+        .overlaps-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: white;
+            border: 1px solid #ced4da;
+            border-top: none;
+            z-index: 1000;
+            display: none;
+        }
+
+        .overlaps-dropdown.show {
+            display: block;
+        }
+
+        .overlaps-dropdown li {
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+
+        .overlaps-dropdown li:hover {
+            background-color: #f8f9fa;
+        }
+
+        .scrollable-list {
+            max-height: 400px; /* Adjust as needed */
+            overflow-y: auto;
+        }
+
+        /* Styles for scrollable lists */
+        .scrollable-list {
+            max-height: 400px; /* Adjust as needed */
+            overflow-y: auto;
+            padding-right: 15px; /* To prevent scrollbar overlap with content */
+        }
+
+        /* Optional: Customize scrollbar appearance for better UX */
+        .scrollable-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .scrollable-list::-webkit-scrollbar-thumb {
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+
+        .scrollable-list::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(0,0,0,0.4);
+        }
+
+        /* **New CSS for Increased Spacing** */
+        .list-group-item {
+            margin-bottom: 10px; /* Adds space below each list item */
+            padding: 15px; /* Increases padding within each list item */
+            border-radius: 5px; /* Optional: Rounded corners for aesthetics */
+        }
+
+        /* Ensure the last item doesn't have extra margin */
+        .list-group-item:last-child {
+            margin-bottom: 0;
+        }
+
+        #toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1055; /* Above other elements but below modals */
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Team Allocation</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Allocate Teams</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/frontend/statistics.html">Statistics</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="/frontend/config.html">Config</a>
+                    </li>
+                </ul>
+                <span class="navbar-text me-3" id="current-user-display">
+                    <!-- Username will be displayed here -->
+                </span>
+                <button class="btn btn-outline-secondary" id="logout-button" style="display: none;">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Config Container -->
+    <div class="container my-5">
+        <h1 class="text-center mb-4">Configuration</h1>
+
+        <div class="row">
+            <!-- Pitches Section -->
+            <div class="col-lg-6 col-md-12 mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3>Pitches</h3>
+                    <button class="btn btn-primary" id="create-pitch-button">Create Pitch</button>
+                </div>
+                <ul class="list-group scrollable-list" id="pitches-list">
+                    <!-- Pitches will be populated here -->
+                </ul>
+            </div>
+
+            <!-- Pitch Details -->
+            <div class="col-lg-6 col-md-12 mb-4">
+                <h3>Pitch Details</h3>
+                <form id="pitch-details-form">
+                    <!-- Read-Only ID Field -->
+                    <div class="mb-3">
+                        <label for="pitch-id" class="form-label">Pitch ID:</label>
+                        <input type="text" id="pitch-id" name="id" class="form-control" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="pitch-name" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="pitch-name" maxlength="50" required pattern="[a-zA-Z0-9\s\(\)_\-]{1,50}" title="Letters, numbers, spaces, hyphens, underscores and brackets only, up to 50 characters.">
+                    </div>
+                    <!-- Updated Capacity Field: Dropdown -->
+                    <div class="mb-3">
+                        <label for="pitch-capacity" class="form-label">Capacity</label>
+                        <select class="form-select form-select-config" id="pitch-capacity" required>
+                            <option value="" disabled selected>Select Capacity</option>
+                            <option value="5">5 Players</option>
+                            <option value="7">7 Players</option>
+                            <option value="9">9 Players</option>
+                            <option value="11">11 Players</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="pitch-location" class="form-label">Location</label>
+                        <input type="text" class="form-control" id="pitch-location" maxlength="100" required pattern="[a-zA-Z0-9\s\(\)_\-]{1,100}" title="Letters, numbers, spaces, hyphens, underscores and brackets only, up to 100 characters.">
+                    </div>
+                    <!-- Cost Field -->
+                    <div class="mb-3">
+                        <label for="pitch-cost" class="form-label">Cost (£)</label>
+                        <input type="number" class="form-control" id="pitch-cost" name="cost" min="0" max="10000"step="0.5" value="0" required>
+                    </div>
+                    <!-- Updated Overlaps With Field: Multi-Select -->
+                    <div class="mb-3 multi-select-container">
+                        <label class="form-label">Overlaps With</label>
+                        <div id="selected-overlaps" class="selected-overlaps" tabindex="0">
+                            <!-- Selected overlaps will appear here as badges -->
+                            <input type="text" id="pitch-overlaps-input" placeholder="Add a pitch..." autocomplete="off">
+                        </div>
+                        <ul id="overlaps-dropdown" class="overlaps-dropdown list-unstyled">
+                            <!-- Dropdown list of available pitches -->
+                        </ul>
+                    </div>
+                    <button type="submit" class="btn btn-success">Save Pitch</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Teams Section -->
+            <div class="col-lg-6 col-md-12 mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3>Teams</h3>
+                    <button class="btn btn-primary" id="create-team-button">Create Team</button>
+                </div>
+                <ul class="list-group scrollable-list" id="teams-list">
+                    <!-- Teams will be populated here -->
+                </ul>
+            </div>
+
+            <!-- Team Details -->
+            <div class="col-lg-6 col-md-12 mb-4">
+                <h3>Team Details</h3>
+                <form id="team-details-form">
+                    <!-- Read-Only ID Field -->
+                    <div class="mb-3">
+                        <label for="team-id" class="form-label">Team ID:</label>
+                        <input type="text" id="team-id" name="id" class="form-control" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="team-name" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="team-name" maxlength="50" required pattern="[a-zA-Z0-9\s\(\)_\-]{1,50}" title="Letters, numbers, spaces, hyphens, underscores and brackets only, up to 50 characters.">
+                    </div>
+                    <!-- Updated Age Group Field: Dropdown -->
+                    <div class="mb-3">
+                        <label for="team-age-group" class="form-label">Age Group</label>
+                        <select class="form-select form-select-config" id="team-age-group" required>
+                            <option value="" disabled selected>Select Age Group</option>
+                            <option value="Under7s">Under7s</option>
+                            <option value="Under8s">Under8s</option>
+                            <option value="Under9s">Under9s</option>
+                            <option value="Under10s">Under10s</option>
+                            <option value="Under11s">Under11s</option>
+                            <option value="Under12s">Under12s</option>
+                            <option value="Under13s">Under13s</option>
+                            <option value="Under14s">Under14s</option>
+                            <option value="Under15s">Under15s</option>
+                            <option value="Under16s">Under16s</option>
+                            <option value="Under17/18s">Under17/18s</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="team-gender" class="form-label">Gender</label>
+                        <select class="form-select form-select-config" id="team-gender" required>
+                            <option value="">Select Gender</option>
+                            <option value="Boys">Boys</option>
+                            <option value="Girls">Girls</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success">Save Team</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- **Toast Container** -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true">
+        <!-- Toasts will be dynamically added here -->
+    </div>
+
+    <script type="module" src="/frontend/config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -18,15 +18,28 @@ def load_json(file_path):
     with open(absolute_path, 'r') as f:
         return json.load(f)
 
-def load_pitches(pitches_file, allocation_config):
+def get_user_config_path(config_type, username):
+    """Get the file path for user-specific or default config."""
+    user_config_file = f'../data/{config_type}_{username}.json'
+    default_config_file = f'../data/{config_type}.json'
+    if os.path.exists(os.path.join(BASE_DIR, user_config_file)):
+        return user_config_file
+    else:
+        return default_config_file
+
+def load_pitches(pitches_file=None, allocation_config=None, username=None):
     """Load only the pitches specified in the allocation configuration.
     If allocation_config['pitches'] is empty, load all pitches."""
-    # Adjust the path to move from allocator/ to base_directory/
-    pitches_path = os.path.join("..", pitches_file)
+    if username:
+        pitches_path = get_user_config_path('pitches', username)
+    else:
+        # Adjust the path to move from allocator/ to base_directory/
+        pitches_path = os.path.join("..", pitches_file)
+    
     all_pitches_data = load_json(pitches_path)
     all_pitches = {Pitch(**pitch).format_label(): Pitch(**pitch) for pitch in all_pitches_data['pitches']}
 
-    if allocation_config.get('pitches'):
+    if allocation_config and allocation_config.get('pitches'):
         allowed_pitch_labels = set(allocation_config['pitches'])
     else:
         allowed_pitch_labels = set(all_pitches.keys())
@@ -44,22 +57,24 @@ def load_pitches(pitches_file, allocation_config):
     logger.info(f"Loaded {len(filtered_pitches)} pitches as specified in the allocation configuration.")
     return filtered_pitches
 
-def load_teams(teams_file):
+def load_teams(teams_file=None, username=None):
     """Load teams from JSON file."""
-    teams_path = os.path.join("..", teams_file)
+    if username:
+        teams_path = get_user_config_path('teams', username)
+    else:
+        teams_path = os.path.join("..", teams_file)
+    
     teams_data = load_json(teams_path)
     teams = []
-    for age, team_ids in teams_data['teams'].items():
-        if not team_ids:
-            logger.info(f"No teams under age group '{age}'. Skipping.")
-            continue
-        for team_id in team_ids:
-            try:
-                name, gender = team_id.rsplit('-', 1)
-                is_girls = gender.lower() == 'girls'
-                teams.append(Team(name, age, is_girls))
-            except ValueError:
-                logger.error(f"Invalid team_id format: '{team_id}'. Expected 'TeamName-Girls' or 'TeamName-Boys'.")
+    for team in teams_data['teams']:
+        try:
+            id = team['id']
+            name = team['name']
+            age = team['age_group']
+            gender = team['gender']
+            teams.append(Team(id, name, age, gender))
+        except ValueError:
+            logger.error(f"Invalid team format: '{team}'. Expected Json.")
     logger.info(f"Loaded {len(teams)} teams.")
     return teams
 

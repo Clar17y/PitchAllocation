@@ -3,42 +3,49 @@
 import { API_ENDPOINTS } from './endpoints.js';
 
 /**
- * Fetch teams data specific to the current user.
- * @returns {Promise<Array>} - List of teams.
+ * Fetch data from a specified API endpoint with query parameters.
+ * @param {string} endpoint - The API endpoint.
+ * @param {object} queryParams - Key-value pairs for query parameters.
+ * @returns {Promise<object>} - The fetched data.
  */
-export async function fetchTeams() {
-    const response = await fetch(API_ENDPOINTS.TEAMS, {
+async function fetchData(endpoint, queryParams = {}) {
+    const url = new URL(endpoint, window.location.origin);
+    Object.keys(queryParams).forEach(key => url.searchParams.append(key, queryParams[key]));
+
+    const response = await fetch(url, {
         method: 'GET',
         credentials: 'same-origin' // Ensure cookies are sent
     });
+
     if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch teams.');
+        throw new Error(errorData.message || 'Failed to fetch data.');
     }
-    const data = await response.json();
-    return data.teams;
+
+    return response.json();
+}
+
+/**
+ * Fetch teams data specific to the current user.
+ * @param {string} username - The current user's username.
+ * @returns {Promise<Array>} - List of teams.
+ */
+export async function fetchTeams(username) {
+    return fetchData(API_ENDPOINTS.TEAMS, { username });
 }
 
 /**
  * Fetch pitches data specific to the current user.
+ * @param {string} username - The current user's username.
  * @returns {Promise<Array>} - List of pitches.
  */
-export async function fetchPitches() {
-    const response = await fetch(API_ENDPOINTS.PITCHES, {
-        method: 'GET',
-        credentials: 'same-origin' // Ensure cookies are sent
-    });
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch pitches.');
-    }
-    const data = await response.json();
-    return data.pitches;
+export async function fetchPitches(username) {
+    return fetchData(API_ENDPOINTS.PITCHES, { username });
 }
 
 /**
  * Submit allocation data for the current user.
- * @param {Object} payload - Allocation data including username.
+ * @param {Object} payload - Allocation data.
  * @returns {Promise<Object>} - Response data.
  */
 export async function submitAllocation(payload) {
@@ -48,16 +55,17 @@ export async function submitAllocation(payload) {
         body: JSON.stringify(payload),
         credentials: 'same-origin' // Ensure cookies are sent
     });
+
     if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to submit allocation.');
     }
+
     return await response.json();
 }
 
 /**
  * Fetch statistics data specific to the current user.
- * Since the backend reads username from cookies, do not send username as a parameter.
  * @returns {Promise<Array>} - List of allocations.
  */
 export async function fetchStatisticsData() {
@@ -65,10 +73,12 @@ export async function fetchStatisticsData() {
         method: 'GET',
         credentials: 'same-origin' // Ensure cookies are sent
     });
+
     if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch statistics.');
     }
+
     const data = await response.json();
     return data.allocations;
 }

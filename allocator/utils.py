@@ -25,9 +25,9 @@ def get_pitch_type(team):
     age = team.age_group
     if age in ['Under7s', 'Under8s']:
         return 5
-    elif age in ['Under9s', 'Under10s'] or (age == 'Under11s' and team.is_girls):
+    elif age in ['Under9s', 'Under10s'] or (age == 'Under11s' and team.gender == 'Girls'):
         return 7
-    elif age in ['Under11s', 'Under12s'] or (age == 'Under13s' and team.is_girls):
+    elif age in ['Under11s', 'Under12s'] or (age == 'Under13s' and team.gender == 'Girls'):
         return 9
     else:
         return 11

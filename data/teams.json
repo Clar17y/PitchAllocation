@@ -1,69 +1,262 @@
 {
-    "teams": {
-        "Under7s": [
-            "TALYBONT-Boys",
-            "HOFFMANN-Boys",
-            "PATON-Boys"
-        ],
-        "Under8s": [
-            "MCDOWELL-Boys",
-            "SOUTHWARK-Boys",
-            "CAMBERWELL-Boys",
-            "POPE-Boys"
-        ],
-        "Under9s": [
-            "BRADBURY-Boys",
-            "BARRY-Boys",
-            "HARRIS-Boys",
-            "FORBES-Boys",
-            "TAYLOR-Girls"
-        ],
-        "Under10s": [
-            "HAYES-Boys",
-            "BILLING-Boys",
-            "SPENCER-Boys",
-            "MATTHEWS-Girls",
-            "JEPHSON-Girls"
-        ],
-        "Under11s": [
-            "STONE-Boys",
-            "KENDRICK-Boys",
-            "ADAMS-Boys",
-            "KNIGHTS-Girls",
-            "GRAHAM-Girls"
-        ],
-        "Under12s": [
-            "MCALISTER-Boys",
-            "OWLS-Boys",
-            "BOURNER-Boys",
-            "DASH-Girls"
-        ],
-        "Under13s": [
-            "SMART-Boys",
-            "PARKINSON-Boys",
-            "WILSON-Boys",
-            "SAWYER-Girls",
-            "CARTER-Girls"
-        ],
-        "Under14s": [
-            "BEVAN-Boys",
-			"KELLY-Boys",
-            "RICHARDSON-Girls"
-        ],
-        "Under15s": [
-            "DATCHELOR-Boys",
-            "PILGRIM-Boys",
-            "RAYWORTH-Girls"
-        ],
-        "Under16s": [
-            "ROBINSON-Boys",
-            "BRITTAIN-Girls"
-        ],
-        "Under17/18s": [
-            "WHITELEY-Boys",
-            "MASSEY-Boys",
-            "BRECON-Boys",
-			"NAIRNE-Girls"
-        ]
-    }
+    "teams": [
+        {
+            "id": 1,
+            "name": "TALYBONT",
+            "age_group": "Under7s",
+            "gender": "Boys"
+        },
+        {
+            "id": 2,
+            "name": "HOFFMANN",
+            "age_group": "Under7s",
+            "gender": "Boys"
+        },
+        {
+            "id": 3,
+            "name": "PATON",
+            "age_group": "Under7s",
+            "gender": "Boys"
+        },
+        {
+            "id": 4,
+            "name": "MCDOWELL",
+            "age_group": "Under8s",
+            "gender": "Boys"
+        },
+        {
+            "id": 5,
+            "name": "SOUTHWARK",
+            "age_group": "Under8s",
+            "gender": "Boys"
+        },
+        {
+            "id": 6,
+            "name": "CAMBERWELL",
+            "age_group": "Under8s",
+            "gender": "Boys"
+        },
+        {
+            "id": 7,
+            "name": "POPE",
+            "age_group": "Under8s",
+            "gender": "Boys"
+        },
+        {
+            "id": 8,
+            "name": "BRADBURY",
+            "age_group": "Under9s",
+            "gender": "Boys"
+        },
+        {
+            "id": 9,
+            "name": "BARRY",
+            "age_group": "Under9s",
+            "gender": "Boys"
+        },
+        {
+            "id": 10,
+            "name": "HARRIS",
+            "age_group": "Under9s",
+            "gender": "Boys"
+        },
+        {
+            "id": 11,
+            "name": "FORBES",
+            "age_group": "Under9s",
+            "gender": "Boys"
+        },
+        {
+            "id": 12,
+            "name": "TAYLOR",
+            "age_group": "Under9s",
+            "gender": "Girls"
+        },
+        {
+            "id": 13,
+            "name": "HAYES",
+            "age_group": "Under10s",
+            "gender": "Boys"
+        },
+        {
+            "id": 14,
+            "name": "BILLING",
+            "age_group": "Under10s",
+            "gender": "Boys"
+        },
+        {
+            "id": 15,
+            "name": "SPENCER",
+            "age_group": "Under10s",
+            "gender": "Boys"
+        },
+        {
+            "id": 16,
+            "name": "MATTHEWS",
+            "age_group": "Under10s",
+            "gender": "Girls"
+        },
+        {
+            "id": 17,
+            "name": "JEPHSON",
+            "age_group": "Under10s",
+            "gender": "Girls"
+        },
+        {
+            "id": 18,
+            "name": "STONE",
+            "age_group": "Under11s",
+            "gender": "Boys"
+        },
+        {
+            "id": 19,
+            "name": "KENDRICK",
+            "age_group": "Under11s",
+            "gender": "Boys"
+        },
+        {
+            "id": 20,
+            "name": "ADAMS",
+            "age_group": "Under11s",
+            "gender": "Boys"
+        },
+        {
+            "id": 21,
+            "name": "KNIGHTS",
+            "age_group": "Under11s",
+            "gender": "Girls"
+        },
+        {
+            "id": 22,
+            "name": "GRAHAM",
+            "age_group": "Under11s",
+            "gender": "Girls"
+        },
+        {
+            "id": 23,
+            "name": "MCALISTER",
+            "age_group": "Under12s",
+            "gender": "Boys"
+        },
+        {
+            "id": 24,
+            "name": "OWLS",
+            "age_group": "Under12s",
+            "gender": "Boys"
+        },
+        {
+            "id": 25,
+            "name": "BOURNER",
+            "age_group": "Under12s",
+            "gender": "Boys"
+        },
+        {
+            "id": 26,
+            "name": "DASH",
+            "age_group": "Under12s",
+            "gender": "Girls"
+        },
+        {
+            "id": 27,
+            "name": "SMART",
+            "age_group": "Under13s",
+            "gender": "Boys"
+        },
+        {
+            "id": 28,
+            "name": "PARKINSON",
+            "age_group": "Under13s",
+            "gender": "Boys"
+        },
+        {
+            "id": 29,
+            "name": "WILSON",
+            "age_group": "Under13s",
+            "gender": "Boys"
+        },
+        {
+            "id": 30,
+            "name": "SAWYER",
+            "age_group": "Under13s",
+            "gender": "Girls"
+        },
+        {
+            "id": 31,
+            "name": "CARTER",
+            "age_group": "Under13s",
+            "gender": "Girls"
+        },
+        {
+            "id": 32,
+            "name": "BEVAN",
+            "age_group": "Under14s",
+            "gender": "Boys"
+        },
+        {
+            "id": 33,
+            "name": "KELLY",
+            "age_group": "Under14s",
+            "gender": "Boys"
+        },
+        {
+            "id": 34,
+            "name": "RICHARDSON",
+            "age_group": "Under14s",
+            "gender": "Girls"
+        },
+        {
+            "id": 35,
+            "name": "DATCHELOR",
+            "age_group": "Under15s",
+            "gender": "Boys"
+        },
+        {
+            "id": 36,
+            "name": "PILGRIM",
+            "age_group": "Under15s",
+            "gender": "Boys"
+        },
+        {
+            "id": 37,
+            "name": "RAYWORTH",
+            "age_group": "Under15s",
+            "gender": "Girls"
+        },
+        {
+            "id": 38,
+            "name": "ROBINSON",
+            "age_group": "Under16s",
+            "gender": "Boys"
+        },
+        {
+            "id": 39,
+            "name": "BRITTAIN",
+            "age_group": "Under16s",
+            "gender": "Girls"
+        },
+        {
+            "id": 40,
+            "name": "WHITELEY",
+            "age_group": "Under17/18s",
+            "gender": "Boys"
+        },
+        {
+            "id": 41,
+            "name": "MASSEY",
+            "age_group": "Under17/18s",
+            "gender": "Boys"
+        },
+        {
+            "id": 42,
+            "name": "BRECON",
+            "age_group": "Under17/18s",
+            "gender": "Boys"
+        },
+        {
+            "id": 43,
+            "name": "NAIRNE",
+            "age_group": "Under17/18s",
+            "gender": "Girls"
+        }
+    ]
 }
