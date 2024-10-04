@@ -1,0 +1,67 @@
+{
+    "teams": {
+        "Under7s": [
+            "TALYBONT-Boys",
+            "HOFFMANN-Boys",
+            "PATON-Boys"
+        ],
+        "Under8s": [
+            "MCDOWELL-Boys",
+            "SOUTHWARK-Boys",
+            "CAMBERWELL-Boys",
+            "POPE-Boys"
+        ],
+        "Under9s": [
+            "BRADBURY-Boys",
+            "BARRY-Boys",
+            "HARRIS-Boys",
+            "FORBES-Boys",
+            "TAYLOR-Girls"
+        ],
+        "Under10s": [
+            "HAYES-Boys",
+            "BILLING-Boys",
+            "SPENCER-Boys",
+            "MATTHEWS-Girls",
+            "JEPHSON-Girls"
+        ],
+        "Under11s": [
+            "STONE-Boys",
+            "KENDRICK-Boys",
+            "ADAMS-Boys",
+            "KNIGHTS-Girls",
+            "GRAHAM-Girls"
+        ],
+        "Under12s": [
+            "MCALISTER-Boys",
+            "OWLS-Boys",
+            "BOURNER-Boys",
+            "DASH-Girls"
+        ],
+        "Under13s": [
+            "SMART-Boys",
+            "PARKINSON-Boys",
+            "WILSON-Boys",
+            "SAWYER-Girls",
+            "CARTER-Girls"
+        ],
+        "Under14s": [
+            "BEVAN-Boys",
+            "RICHARDSON-Girls"
+        ],
+        "Under15s": [
+            "DATCHELOR-Boys",
+            "PILGRIM-Boys",
+            "RAYWORTH-Girls"
+        ],
+        "Under16s": [
+            "ROBINSON-Boys",
+            "BRITTAIN-Girls"
+        ],
+        "Under17/18s": [
+            "WHITELEY-Boys",
+            "MASSEY-Boys",
+            "BRECON-Boys"
+        ]
+    }
+}

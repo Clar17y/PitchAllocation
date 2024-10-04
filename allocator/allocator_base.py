@@ -114,6 +114,12 @@ class Allocator:
             if team.name in name and format_age_group(team.age_group) in name:
                 return team
         return None
+    
+    def get_pitch_from_name(self, name):
+        for pitch in self.pitches:
+            if pitch.name in name:
+                return pitch
+        return None
 
     def parse_preferred_time(self, preferred_time):
         try:
@@ -196,13 +202,12 @@ class Allocator:
 
             # Allocate the team to the pitch
             pitch.add_match(team, start_time, duration)
-            cost_indicator = " (Paid)" if pitch.cost > 0 else ""
             self.allocations.append({
                 'time': start_time.strftime("%I:%M%p").lower(),
                 'team': team.format_label(),
-                'pitch': f"{pitch.format_label()} ({pitch.code}){cost_indicator}"
+                'pitch': f"{pitch.format_label()}"
             })
-            logger.info(f"Allocated {team.format_label()} to pitch '{pitch.format_label()}' ({pitch.code}){cost_indicator} at {start_time.strftime('%H:%M')}.")
+            logger.info(f"Allocated {team.format_label()} to pitch '{pitch.format_label()}' at {start_time.strftime('%H:%M')}.")
             return True
 
         return False
@@ -221,24 +226,15 @@ class Allocator:
         Returns:
             str: Formatted allocation string.
         """
-        # Helper function to extract capacity from pitch label
-        def extract_capacity(pitch_label):
-            match = re.match(r"(\d+)aside", pitch_label)
-            if match:
-                return int(match.group(1))
-            else:
-                logger.error(f"Unable to extract capacity from pitch label: '{pitch_label}'. Defaulting capacity to 0.")
-                return 0
-
         # Group allocations by pitch capacity
         allocations_by_capacity = {}
         for alloc in self.allocations:
-            # Assuming alloc['pitch'] is like "5aside - HD TL (A)"
-            pitch_label = alloc['pitch'].split(" (")[0]  # Extract "5aside - HD TL"
-            capacity = extract_capacity(pitch_label)
-            if capacity not in allocations_by_capacity:
-                allocations_by_capacity[capacity] = []
-            allocations_by_capacity[capacity].append(alloc)
+            pitch = next((p for p in self.pitches if p.format_label() == alloc['pitch']), None)
+            if pitch:
+                capacity = pitch.capacity
+                if capacity not in allocations_by_capacity:
+                    allocations_by_capacity[capacity] = []
+                allocations_by_capacity[capacity].append(alloc)
 
         # Sort capacities in ascending order (younger age groups first)
         sorted_capacities = sorted(allocations_by_capacity.keys())

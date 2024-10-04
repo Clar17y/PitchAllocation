@@ -4,7 +4,7 @@ import random
 from tkinter import ttk, scrolledtext, messagebox
 from datetime import datetime
 import logging
-from allocator.config_loader import load_pitches, load_teams
+from allocator.config_loader import load_pitches, load_teams, load_allocation_config
 from allocator.allocator_base import Allocator
 from allocator.utils import format_age_group
 

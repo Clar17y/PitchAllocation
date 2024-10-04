@@ -1,0 +1,51 @@
+/* styles.css */
+
+/* General Styles */
+body {
+    background-color: #f8f9fa;
+}
+
+h1 {
+    color: #343a40;
+}
+
+.card {
+    background-color: #ffffff;
+}
+
+.form-label {
+    font-weight: bold;
+}
+
+#allocation-results {
+    resize: none;
+}
+
+#console-logs {
+    background-color: #e9ecef;
+    border-radius: 5px;
+}
+
+/* Scrollable Containers */
+@media (max-width: 768px) {
+    #pitches-container,
+    #teams-container,
+    #allocation-results,
+    #console-logs {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+}
+
+/* Padding inside scrollable containers */
+#pitches-container,
+#teams-container,
+#allocation-results,
+#console-logs {
+    padding: 10px;
+}
+
+/* Button Styles */
+.btn {
+    min-width: 100px;
+}

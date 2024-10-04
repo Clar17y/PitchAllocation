@@ -1,5 +1,4 @@
-# allocator/config_loader.py
-import yaml
+import json  # Import JSON library alongside YAML
 import os
 from allocator.models.pitch import Pitch
 from allocator.models.team import Team
@@ -10,21 +9,21 @@ logger = setup_logger(__name__)
 # Determine the absolute path to the directory containing config_loader.py
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def load_yaml(file_path):
-    """Load YAML file using absolute paths."""
+def load_json(file_path):
+    """Load JSON file using absolute paths."""
     absolute_path = os.path.join(BASE_DIR, file_path)
     if not os.path.exists(absolute_path):
         logger.error(f"File not found: {absolute_path}")
         raise FileNotFoundError(f"File not found: {absolute_path}")
     with open(absolute_path, 'r') as f:
-        return yaml.safe_load(f)
+        return json.load(f)
 
 def load_pitches(pitches_file, allocation_config):
     """Load only the pitches specified in the allocation configuration.
     If allocation_config['pitches'] is empty, load all pitches."""
     # Adjust the path to move from allocator/ to base_directory/
-    pitches_path = os.path.join('..', pitches_file)
-    all_pitches_data = load_yaml(pitches_path)
+    pitches_path = os.path.join("..", pitches_file)
+    all_pitches_data = load_json(pitches_path)
     all_pitches = {Pitch(**pitch).format_label(): Pitch(**pitch) for pitch in all_pitches_data['pitches']}
 
     if allocation_config.get('pitches'):
@@ -46,25 +45,28 @@ def load_pitches(pitches_file, allocation_config):
     return filtered_pitches
 
 def load_teams(teams_file):
-    """Load teams from YAML file."""
-    teams_path = os.path.join('..', teams_file)
-    teams_data = load_yaml(teams_path)
+    """Load teams from JSON file."""
+    teams_path = os.path.join("..", teams_file)
+    teams_data = load_json(teams_path)
     teams = []
-    for age, names in teams_data['teams'].items():
-        if not names:
+    for age, team_ids in teams_data['teams'].items():
+        if not team_ids:
             logger.info(f"No teams under age group '{age}'. Skipping.")
             continue
-        for name in names:
-            is_girls = '(Girls)' in name
-            clean_name = name.replace(' (Girls)', '')
-            teams.append(Team(clean_name, age, is_girls))
+        for team_id in team_ids:
+            try:
+                name, gender = team_id.rsplit('-', 1)
+                is_girls = gender.lower() == 'girls'
+                teams.append(Team(name, age, is_girls))
+            except ValueError:
+                logger.error(f"Invalid team_id format: '{team_id}'. Expected 'TeamName-Girls' or 'TeamName-Boys'.")
     logger.info(f"Loaded {len(teams)} teams.")
     return teams
 
 def load_allocation_config(allocation_file):
     """Load and validate allocation configuration."""
-    allocation_path = os.path.join('..', allocation_file)
-    config = load_yaml(allocation_path)
+    allocation_path = os.path.join("..", allocation_file)
+    config = load_json(allocation_path)
     validate_allocation_config(config)
     return config
 

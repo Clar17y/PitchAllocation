@@ -38,7 +38,7 @@ class Pitch:
         return True
 
     def format_label(self):
-        return f"{self.capacity}aside - {self.location}"
+        return f"{self.capacity}aside - {self.location} ({self.code})"
     
     def reset_matches(self):
         """Reset all scheduled matches."""
