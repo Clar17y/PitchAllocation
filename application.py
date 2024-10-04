@@ -4,6 +4,7 @@ from allocator.config_loader import load_pitches, load_teams
 from allocator.logger import setup_logger
 from datetime import datetime
 from pathlib import Path
+import re
 import glob
 
 
@@ -46,6 +47,12 @@ def get_pitches():
 
 @application.route('/api/allocate', methods=['POST'])
 def allocate():
+    # Retrieve username from cookies
+    username = request.cookies.get('username')
+    if not username:
+        logger.error("Username not found in cookies.")
+        return jsonify({'allocations': [], 'logs': [{'level': 'error', 'message': 'User not authenticated.'}]}), 401
+
     if not pitches or not teams:
         return jsonify({'allocations': [], 'logs': [{'level': 'error', 'message': 'Initialization failed. Pitches or teams data missing.'}]}), 500
 
@@ -56,7 +63,7 @@ def allocate():
     selected_pitches = data.get('pitches', [])
     selected_teams = data.get('teams', [])
 
-    logger.info("Received allocation request.")
+    logger.info(f"Received allocation request for {username}.")
     logger.debug(f"Allocation data: {data}")
 
     # Filter pitches based on selection
@@ -66,6 +73,13 @@ def allocate():
         return jsonify({
             'allocations': [],
             'logs': [{'level': 'error', 'message': 'No pitches selected or available.'}]
+        }), 400
+    
+    if not selected_teams:
+        logger.error("No teams selected or available.")
+        return jsonify({
+            'allocations': [],
+            'logs': [{'level': 'error', 'message': 'No teams selected or available.'}]
         }), 400
 
     # Validate and process selected teams
@@ -141,20 +155,25 @@ def allocate():
         logs.append({'level': 'warning', 'message': f'Unallocated Teams:\n{unallocated}'})
 
     # Save Allocation Results to Output folder
-    save_allocation_results(date, formatted_allocations)
+    save_allocation_results(username, date, formatted_allocations)
 
     return jsonify({'allocations': formatted_allocations, 'logs': logs})
 
 
-def save_allocation_results(date_str, allocations):
+def save_allocation_results(username, date_str, allocations):
     """
     Saves the allocation results to a file in the Output directory.
-    Overwrites the file if it already exists for the same day.
+    Each user's allocations are stored in separate files identified by their username and date.
     """
     try:
+        # Sanitize the username to prevent directory traversal or injection
+        if not re.match(r'^[a-zA-Z0-9]+$', username):
+            logger.error(f"Invalid username format: '{username}'. Allocations not saved.")
+            return
+
         # Parse the date string to ensure it's valid
         allocation_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        filename = OUTPUT_DIR / f"{allocation_date}.txt"
+        filename = OUTPUT_DIR / f"{allocation_date}_{username}.txt"
 
         # Format the allocations as Allocation Results
         if not allocations:
@@ -168,17 +187,18 @@ def save_allocation_results(date_str, allocations):
                     if current_capacity is not None:
                         result_text += '\n'  # Add an empty line between capacity groups
                     current_capacity = alloc['capacity']
-                result_text += f"{alloc['time']} - {alloc['team']} - {alloc['pitch']} - {alloc['preferred']}\n"
+                preferred_str = 'True' if alloc['preferred'] else 'False'
+                result_text += f"{alloc['time']} - {alloc['team']} - {alloc['pitch']} - {preferred_str}\n"
 
             result_text = result_text.strip()
 
-        # Write to the file, overwriting if it exists
+        # Write to the file, overwriting if it exists for the same user and day
         with open(filename, 'w') as f:
             f.write(result_text + '\n')  # Ensure the file ends with a newline
 
         logger.info(f"Allocation results saved to '{filename}'.")
     except Exception as e:
-        logger.error(f"Failed to save allocation results: {e}")
+        logger.error(f"Failed to save allocation results for user '{username}': {e}")
 
 @application.route('/', methods=['GET'])
 def serve_index():
@@ -191,13 +211,36 @@ def serve_static(filename):
 @application.route('/api/statistics', methods=['GET'])
 def get_statistics():
     """
-    Fetches all allocation results from the Output directory
+    Fetches all allocation results for the current user from the Output directory
     and returns them as a list of allocation records.
     """
     allocations = []
     try:
-        for file_path in OUTPUT_DIR.glob("*.txt"):
-            date_str = file_path.stem  # Filename without extension
+        # Retrieve username from cookies
+        username = request.cookies.get('username')
+        if not username:
+            logger.error("Username not found in cookies.")
+            return jsonify({'error': 'User not authenticated.'}), 401
+
+        logger.debug(f"Retrieved username from cookies: '{username}'")
+
+        # Sanitize the username to prevent directory traversal or injection
+        if not re.match(r'^[a-zA-Z0-9]+$', username):
+            logger.error(f"Invalid username format: '{username}'.")
+            return jsonify({'error': 'Invalid username format.'}), 400
+
+        # Pattern to match allocation files for the user, e.g., "2023-08-15_Test.txt"
+        pattern = f"*_{username}.txt"
+        user_files = list(OUTPUT_DIR.glob(pattern))
+
+        logger.debug(f"Looking for files with pattern '{pattern}'. Found {len(user_files)} files.")
+
+        if not user_files:
+            logger.info(f"No allocations found for user '{username}'.")
+            return jsonify({'allocations': []})
+
+        for file_path in user_files:
+            date_str = file_path.stem.split('_')[0]  # Extract date from filename
             with open(file_path, 'r') as f:
                 content = f.read().strip()
                 if content == "No allocations available.":
@@ -205,17 +248,18 @@ def get_statistics():
                 for line in content.split('\n'):
                     parts = line.split(' - ')
                     if len(parts) != 5:
+                        logger.warning(f"Skipping malformed line in file '{file_path}': {line}")
                         continue
-                    time, team, capacity, pitch, preferred = parts
+                    time, team, pitch, capacity, preferred_str = parts
                     allocations.append({
                         'date': date_str,
                         'time': time.strip(),
                         'team': team.strip(),
                         'pitch': pitch.strip(),
-                        'preferred': preferred.lower() == 'true'
+                        'preferred': preferred_str.lower() == 'true'
                     })
-        logger.info(f"Fetched statistics data successfully: {allocations}")
-        logger.info("Fetched statistics data successfully.")
+
+        logger.info(f"Fetched statistics data successfully for user '{username}'. Total allocations: {len(allocations)}.")
     except Exception as e:
         logger.error(f"Failed to fetch statistics data: {e}")
         return jsonify({'error': 'Failed to fetch statistics data.'}), 500
