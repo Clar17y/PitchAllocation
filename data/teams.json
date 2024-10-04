@@ -47,6 +47,7 @@
         ],
         "Under14s": [
             "BEVAN-Boys",
+			"KELLY-Boys",
             "RICHARDSON-Girls"
         ],
         "Under15s": [
@@ -61,7 +62,8 @@
         "Under17/18s": [
             "WHITELEY-Boys",
             "MASSEY-Boys",
-            "BRECON-Boys"
+            "BRECON-Boys",
+			"NAIRNE-Girls"
         ]
     }
 }

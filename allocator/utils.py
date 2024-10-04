@@ -3,11 +3,14 @@ from datetime import datetime, timedelta
 def get_datetime(time_str_override, default_time_str, reference_date):
     """Convert a time string to a datetime.datetime object with the given reference_date."""
     time_str = time_str_override if time_str_override else default_time_str
-    try:
-        time_obj = datetime.strptime(time_str, "%H:%M").time()
-        return datetime.combine(reference_date, time_obj)
-    except ValueError:
-        raise ValueError(f"Invalid time format: '{time_str}'. Expected format: HH:MM")
+    if time_str != "--:--":
+        try:
+            time_obj = datetime.strptime(time_str, "%H:%M").time()
+            return datetime.combine(reference_date, time_obj)
+        except ValueError:
+            raise ValueError(f"Invalid time format: '{time_str}'. Expected format: HH:MM")
+    else:
+        return None
 
 def validate_time_format(time_str):
     """Validate if the provided time string is in the correct format HH:MM."""

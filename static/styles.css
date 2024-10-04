@@ -1,11 +1,10 @@
-/* styles.css */
-
 /* General Styles */
 body {
     background-color: #f8f9fa;
+    font-size: 0.875rem !important;
 }
 
-h1 {
+h1, h3, h5 {
     color: #343a40;
 }
 
@@ -17,35 +16,105 @@ h1 {
     font-weight: bold;
 }
 
+/* Allocation Results and Console Logs */
 #allocation-results {
     resize: none;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 #console-logs {
     background-color: #e9ecef;
     border-radius: 5px;
+    padding: 10px;
+    height: 300px;
+    overflow-y: scroll;
 }
 
-/* Scrollable Containers */
-@media (max-width: 768px) {
-    #pitches-container,
-    #teams-container,
-    #allocation-results,
-    #console-logs {
-        max-height: 300px;
-        overflow-y: auto;
+/* Prevent input-group from exceeding container width */
+.input-group {
+    flex-wrap: nowrap;
+}
+
+/* Adjust select box widths on small screens */
+@media (max-width: 576px) {
+    .input-group .form-select {
+        flex: 1 1 auto;
+    }
+    .input-group .input-group-text {
+        flex: 0 0 auto;
+    }
+
+    /* Adjust form-check for better alignment */
+    .form-check {
+        display: flex;
+        align-items: center;
+    }
+
+    .form-check-input {
+        margin-right: 0.5rem;
+    }
+
+    .form-check-label {
+        margin-right: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .form-select {
+        font-size: 0.85rem;
+    }
+
+    .wide-select {
+        width: 100%; /* Full width on small screens */
+    }
+
+    /* Ensure buttons are touch-friendly */
+    button {
+        padding: 0.5rem;
+    }
+
+    /* Adjust textarea and logs for better readability */
+    #allocation-results, #console-logs {
+        font-size: 0.875rem;
+        min-height: 150px;
     }
 }
 
-/* Padding inside scrollable containers */
-#pitches-container,
-#teams-container,
-#allocation-results,
-#console-logs {
-    padding: 10px;
+/* Ensure checkboxes remain a consistent size */
+.form-check-input {
+    width: 1rem;
+    height: 1rem;
 }
 
-/* Button Styles */
-.btn {
-    min-width: 100px;
+/* Allow the label text to wrap if it's too long */
+.form-check-label {
+    white-space: normal;
+    word-wrap: break-word;
+    flex-grow: 1;
+}
+
+/* Set a minimum width for the time dropdown */
+.form-select {
+    min-width: 80px;
+    max-width: 80px;
+}
+
+/* Preferred Time Highlight */
+.preferred-time {
+    background-color: #d4edda !important; /* Light green background */
+    color: #155724 !important;            /* Dark green text for readability */
+    border-radius: 4px !important;        /* Optional: Adds slight rounding to the cell corners */
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+.wide-select {
+    min-width: 250px; 
+    max-width: 30%;
+}
+
+table {
+    white-space: nowrap;
 }

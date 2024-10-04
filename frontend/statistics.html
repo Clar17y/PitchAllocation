@@ -1,0 +1,110 @@
+<!-- frontend/statistics.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Allocation Statistics</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"> <!-- Ensure proper scaling on mobile -->
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Team Allocation</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Allocate Teams</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="/frontend/statistics.html">Statistics</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <h1 class="text-center mb-4">Allocation Statistics</h1>
+        <div class="text-center mb-4">A green shaded cell indicates the team requested that time.</div>
+        <div class="mb-4">
+            <label for="team-select" class="form-label">Select Team:</label>
+            <select id="team-select" class="form-select wide-select">
+                <option value="All" selected>All Teams</option>
+                <!-- Other options will be populated dynamically -->
+            </select>
+        </div>
+        <!-- Match Start Times Table -->
+        <h3>Match Start Times</h3>
+        <div class="table-container mb-5">
+            <table class="table table-bordered" id="times-table">
+                <thead>
+                    <tr>
+                        <th>Team Name</th>
+                        <!-- Dates will be populated dynamically -->
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Start times will be populated here -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Allocated Pitches Table -->
+        <h3>Allocated Pitches</h3>
+        <div class="table-container mb-5">
+            <table class="table table-bordered" id="pitches-table">
+                <thead>
+                    <tr>
+                        <th>Team Name</th>
+                        <!-- Dates will be populated dynamically -->
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Pitches will be populated here -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Start Time Frequency Table -->
+        <h3>Start Time Frequency</h3>
+        <div class="table-container mb-5">
+            <table class="table table-bordered" id="start-time-frequency-table">
+                <thead>
+                    <tr>
+                        <th>Team Name</th>
+                        <!-- Start Times will be populated dynamically -->
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Frequency counts will be populated here -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pitch Usage Frequency Table -->
+        <h3>Pitch Usage Frequency</h3>
+        <div class="table-container mb-5">
+            <table class="table table-bordered" id="pitch-usage-frequency-table">
+                <thead>
+                    <tr>
+                        <th>Team Name</th>
+                        <!-- Pitch Names will be populated dynamically -->
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Frequency counts will be populated here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="/frontend/app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

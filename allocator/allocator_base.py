@@ -137,7 +137,7 @@ class Allocator:
                 self.unallocated_teams.append(team)
                 continue
             
-            allocated = self.try_allocate_team(team, pref_time, end_of_day)
+            allocated = self.try_allocate_team(team, pref_time, end_of_day, preferred=True)
             logger.info(f"allocated: {allocated}")
             if allocated:
                 allocated_pref_teams.add(team)
@@ -173,7 +173,7 @@ class Allocator:
         # Update unallocated teams
         self.unallocated_teams = list(teams_to_allocate)
 
-    def try_allocate_team(self, team, start_time, end_of_day, specific_pitch=None):
+    def try_allocate_team(self, team, start_time, end_of_day, specific_pitch=None, preferred=False):
         pitch_type = get_pitch_type(team)
         duration = get_duration(pitch_type)
 
@@ -205,7 +205,8 @@ class Allocator:
             self.allocations.append({
                 'time': start_time.strftime("%I:%M%p").lower(),
                 'team': team.format_label(),
-                'pitch': f"{pitch.format_label()}"
+                'pitch': f"{pitch.format_label()}",
+                'preferred': preferred
             })
             logger.info(f"Allocated {team.format_label()} to pitch '{pitch.format_label()}' at {start_time.strftime('%H:%M')}.")
             return True
@@ -247,7 +248,7 @@ class Allocator:
                 key=lambda x: datetime.strptime(x['time'], "%I:%M%p")
             )
             for alloc in sorted_allocs:
-                formatted_allocations += f"{alloc['time']} - {alloc['team']} - {alloc['pitch']}\n"
+                formatted_allocations += f"{alloc['time']} - {alloc['team']} - {alloc['pitch']} - {alloc['preferred']}\n"
             formatted_allocations += "\n"  # Line break between capacity groups
 
         return formatted_allocations.strip()  # Remove the trailing newline
