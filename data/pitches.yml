@@ -36,6 +36,7 @@ pitches:
     code: "LA"
     location: "LA Annex"
     capacity: 9
+    cost: 1
   - name: "Hawes Down Left (11)"
     code: "HDL"
     location: "HD Left"
@@ -56,3 +57,4 @@ pitches:
     code: "CDS"
     location: "Charles Darwin School"
     capacity: 11
+    cost: 1
