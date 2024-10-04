@@ -4,16 +4,16 @@ from allocator.config_loader import load_pitches, load_teams
 from allocator.logger import setup_logger
 from datetime import datetime
 from pathlib import Path
+import boto3
+from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 import re
-import glob
-
 
 application = Flask(__name__)
 logger = setup_logger(__name__)
 
-# Ensure Output directory exists
-OUTPUT_DIR = Path('Output')
-OUTPUT_DIR.mkdir(exist_ok=True)
+# Let's use S3 for storage
+s3 = boto3.client('s3')
+BUCKET_NAME = 'owpitchalloc'
 
 # Load initial configurations
 try:
@@ -173,7 +173,7 @@ def save_allocation_results(username, date_str, allocations):
 
         # Parse the date string to ensure it's valid
         allocation_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        filename = OUTPUT_DIR / f"{allocation_date}_{username}.txt"
+        s3_filename = f"allocations/{username}/{allocation_date}.txt"
 
         # Format the allocations as Allocation Results
         if not allocations:
@@ -192,11 +192,11 @@ def save_allocation_results(username, date_str, allocations):
 
             result_text = result_text.strip()
 
-        # Write to the file, overwriting if it exists for the same user and day
-        with open(filename, 'w') as f:
-            f.write(result_text + '\n')  # Ensure the file ends with a newline
-
-        logger.info(f"Allocation results saved to '{filename}'.")
+        try:
+            s3.put_object(Bucket=BUCKET_NAME, Key=s3_filename, Body=result_text)
+            logger.info(f"Allocation results saved to S3 bucket '{BUCKET_NAME}' with key '{s3_filename}'.")
+        except (NoCredentialsError, PartialCredentialsError) as e:
+            logger.error(f"Failed to save allocation results to S3: {e}")
     except Exception as e:
         logger.error(f"Failed to save allocation results for user '{username}': {e}")
 
@@ -229,20 +229,20 @@ def get_statistics():
             logger.error(f"Invalid username format: '{username}'.")
             return jsonify({'error': 'Invalid username format.'}), 400
 
-        # Pattern to match allocation files for the user, e.g., "2023-08-15_Test.txt"
-        pattern = f"*_{username}.txt"
-        user_files = list(OUTPUT_DIR.glob(pattern))
+        response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"allocations/{username}/")
+        user_files = response.get('Contents', [])
 
-        logger.debug(f"Looking for files with pattern '{pattern}'. Found {len(user_files)} files.")
+        logger.debug(f"Found {len(user_files)} files for user '{username}'.")
 
         if not user_files:
             logger.info(f"No allocations found for user '{username}'.")
             return jsonify({'allocations': []})
 
         for file_path in user_files:
-            date_str = file_path.stem.split('_')[0]  # Extract date from filename
-            with open(file_path, 'r') as f:
-                content = f.read().strip()
+            date_str = file_path['Key'].split('/')[-1].split('.')[0]  # Extract date from filename
+            try:
+                response = s3.get_object(Bucket=BUCKET_NAME, Key=file_path['Key'])
+                content = response['Body'].read().decode('utf-8')
                 if content == "No allocations available.":
                     continue
                 for line in content.split('\n'):
@@ -250,7 +250,7 @@ def get_statistics():
                     if len(parts) != 5:
                         logger.warning(f"Skipping malformed line in file '{file_path}': {line}")
                         continue
-                    time, team, pitch, capacity, preferred_str = parts
+                    time, team, capacity, pitch, preferred_str = parts
                     allocations.append({
                         'date': date_str,
                         'time': time.strip(),
@@ -258,6 +258,8 @@ def get_statistics():
                         'pitch': pitch.strip(),
                         'preferred': preferred_str.lower() == 'true'
                     })
+            except Exception as e:
+                logger.info(f"Error getting file from s3: {e}")
 
         logger.info(f"Fetched statistics data successfully for user '{username}'. Total allocations: {len(allocations)}.")
     except Exception as e:
