@@ -1,16 +1,16 @@
 # PitchAllocation
 Exploring the world of AWS with a Pitch Allocation system for my grassroots team
 
-Step 1:
+**Step 1:**
 Build a Python application that takes a list of pitches and teams and tries to allocate the teams across the pitches 
 
-Step 2:
+**Step 2:**
 Allow the user to specify more details about the allocation process (which teams, which pitches) 
 
-Step 3:
+**Step 3:**
 Create a UI for the project in Python
 
-Step 4:
+**Step 4**:
 Change it into a website that can be used by members of the grassroots team from their mobile
 
 
