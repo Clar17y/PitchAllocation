@@ -2,7 +2,7 @@ import json
 import os
 from flask import Flask, request, jsonify, send_from_directory
 from allocator.allocator_base import Allocator
-from allocator.config_loader import load_pitches, load_teams
+from allocator.config_loader import load_pitches, load_teams, save_json_to_s3, get_config_key, get_default_config_key
 from allocator.logger import setup_logger
 from allocator.models.pitch import Pitch
 from allocator.models.team import Team
@@ -262,9 +262,9 @@ def get_statistics():
                 for line in content.split('\n'):
                     parts = line.split(' - ')
                     if len(parts) != 5:
-                        logger.warning(f"Skipping malformed line in file '{file_path}': {line}")
+                        logger.warning(f"Skipping malformed line in file '{file_path['Key']}': {line}")
                         continue
-                    time, team, capacity, pitch, preferred_str = parts
+                    time, team, capacity,pitch, preferred_str = parts
                     allocations.append({
                         'date': date_str,
                         'time': time.strip(),
@@ -284,6 +284,8 @@ def get_statistics():
 
 @application.route('/api/config/<config_type>', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def config_handler(config_type):
+    nonPluralConfigType = "pitch" if config_type == "pitches" else "team"
+    # Sanitize config_type to prevent directory traversal or injection
     if config_type not in ['pitches', 'teams']:
         logger.error(f"Invalid config type: '{config_type}'")
         return jsonify({'error': 'Invalid config type.'}), 400
@@ -293,233 +295,116 @@ def config_handler(config_type):
         logger.error("Username not found in cookies.")
         return jsonify({'error': 'Username is required.'}), 400
 
-    user_filename = f'{config_type}_{username}.json'
-    default_filename = f'{config_type}.json'
-    user_file_path = os.path.join('data', user_filename)
-    default_file_path = os.path.join('data', default_filename)
-    logger.info(f"User file path: {user_file_path}")
-    logger.info(f"Default file path: {default_file_path}")
+    user_key = get_config_key(config_type, username)
+    default_key = get_default_config_key(config_type)
+    logger.info(f"User config key: {user_key}")
+    logger.info(f"Default config key: {default_key}")
 
     if request.method == 'GET':
-        if os.path.exists(user_file_path):
-            with open(user_file_path, 'r') as f:
-                data = json.load(f)
-            return jsonify({config_type: data[config_type]}), 200
-        else:
-            # Return default config
-            if not os.path.exists(default_file_path):
-                return jsonify({'error': 'Default config not found.'}), 404
-            with open(default_file_path, 'r') as f:
-                data = json.load(f)
-            return jsonify({config_type: data[config_type]}), 200
+        try:
+            config_data = load_pitches(username=username) if config_type == 'pitches' else load_teams(username=username)
+            # Serialize using to_dict to exclude 'matches'
+            serialized_data = [item.to_dict() for item in config_data] if config_type == 'pitches' else [item.__dict__ for item in config_data]
+            return jsonify({config_type: serialized_data}), 200
+        except FileNotFoundError:
+            return jsonify({'error': f'Default {config_type} config not found.'}), 404
+        except Exception as e:
+            logger.error(f"Error loading {config_type}: {e}")
+            return jsonify({'error': 'Failed to load configuration.'}), 500
 
     elif request.method in ['POST', 'PUT', 'DELETE']:
         try:
             payload = request.get_json()
+            logger.info(f"Received payload: {payload}")
             if not payload and request.method != 'DELETE':
                 logger.error("No data provided.")
                 return jsonify({'error': 'No data provided.'}), 400
 
-            # Load existing data or initialize
-            if os.path.exists(user_file_path):
-                with open(user_file_path, 'r') as f:
-                    data = json.load(f)
-            else:
-                # Load default data if user file doesn't exist
-                if os.path.exists(default_file_path):
-                    with open(default_file_path, 'r') as f:
-                        data = json.load(f)
-                else:
-                    data = {config_type: []}
+            # Load existing data
+            try:
+                config_data = load_pitches(username=username) if config_type == 'pitches' else load_teams(username=username)
+            except FileNotFoundError:
+                # Load default config if user config doesn't exist
+                try:
+                    config_data = load_pitches() if config_type == 'pitches' else load_teams()
+                except FileNotFoundError:
+                    config_data = [] if config_type == 'pitches' else []
+
+            # Convert to a mutable type (list of dicts)
+            config_list = [item.to_dict() for item in config_data] if config_type == 'pitches' else [item.__dict__ for item in config_data]
 
             if config_type == 'pitches':
-                items = data[config_type]
-                if request.method == 'POST':
-                    if len(items) >= 40:
-                        logger.warning("Maximum number of pitches reached.")
-                        return jsonify({'error': 'Maximum number of pitches (40) reached.'}), 400
-                    # Create new pitch
-                    new_pitch = {
-                        'id': generate_unique_id(items),
-                        'name': payload['name'],
-                        'capacity': payload['capacity'],
-                        'location': payload['location'],
-                        'cost': payload.get('cost', 0),
-                        'overlaps_with': payload.get('overlaps_with', [])
-                    }
+                max_items = 40
+                unique_fields = ['capacity', 'name']
+            else:
+                max_items = 100
+                unique_fields = ['name', 'age_group', 'gender']
 
-                    # Generate format_label
-                    new_format_label = Pitch(**new_pitch).format_label()
+            if request.method == 'POST':
+                if len(config_list) >= max_items:
+                    logger.warning(f"Maximum number of {config_type} reached.")
+                    return jsonify({'error': f'Maximum number of {config_type} ({max_items}) reached.'}), 400
 
-                    # Check for duplicate format_label
-                    if any(Pitch(**item).format_label() == new_format_label for item in items):
-                        logger.warning("Duplicate pitch format_label detected.")
-                        return jsonify({'error': 'A pitch with the same capacity and location already exists.'}), 400
+                # Create new item
+                new_id = generate_unique_id(config_list)
+                new_item = {**payload, 'id': new_id}
 
-                    # Validate input lengths
-                    if len(new_pitch['name']) > 50 or len(new_pitch['location']) > 100:
-                        logger.warning("Pitch name or location exceeds maximum length.")
-                        return jsonify({'error': 'Pitch name or location exceeds maximum allowed length.'}), 400
+                # Validate uniqueness
+                if any(all(item[field] == new_item[field] for field in unique_fields) for item in config_list):
+                    logger.warning(f"Duplicate {nonPluralConfigType} detected.")
+                    return jsonify({'error': f'A {nonPluralConfigType} with the same {", ".join(unique_fields)} already exists.'}), 400
 
-                    # Validate allowed characters
-                    if not all(c.isalnum() or c in [' ', '-', '_'] for c in new_pitch['name']):
-                        logger.warning("Pitch name contains invalid characters.")
-                        return jsonify({'error': 'Pitch name contains invalid characters.'}), 400
+                # Additional validations can be added here (e.g., input lengths, allowed characters)
 
-                    if not all(c.isalnum() or c in [' ', '-', '_'] for c in new_pitch['location']):
-                        logger.warning("Pitch location contains invalid characters.")
-                        return jsonify({'error': 'Pitch location contains invalid characters.'}), 400
-                    data[config_type].append(new_pitch)
-                elif request.method == 'PUT':
-                    pitch_id = int(payload.get('id', 0))
-                    # Update existing pitch
-                    for pitch in items:
-                        if pitch['id'] == pitch_id:
-                            # Generate new format_label
-                            updated_format_label = Pitch(**payload).format_label()
+                config_list.append(new_item)
+                logger.info(f"Created new {nonPluralConfigType} with ID {new_id}.")
 
-                            # Check for duplicate format_label excluding current pitch
-                            if any(Pitch(**item).format_label() == updated_format_label and item['id'] != pitch_id for item in items):
-                                logger.warning("Duplicate pitch format_label detected during update.")
-                                return jsonify({'error': 'A pitch with the same capacity and location already exists.'}), 400
+            elif request.method == 'PUT':
+                item_id = payload.get('id')
+                if not item_id:
+                    logger.error("ID not provided for update.")
+                    return jsonify({'error': 'ID is required for update.'}), 400
 
-                            # Validate input lengths
-                            if len(payload['name']) > 50 or len(payload['location']) > 100:
-                                logger.warning("Pitch name or location exceeds maximum length during update.")
-                                return jsonify({'error': 'Pitch name or location exceeds maximum allowed length.'}), 400
+                for item in config_list:
+                    if item['id'] == item_id:
+                        # Update fields, excluding 'matches' if present
+                        updated_item = {**item, **payload}
+                        # Remove 'matches' if it's part of the payload mistakenly
+                        updated_item.pop('matches', None)
+                        item.update(updated_item)
+                        logger.info(f"Updated {nonPluralConfigType} with ID {item_id}.")
+                        break
+                else:
+                    logger.error(f"{nonPluralConfigType.capitalize()} not found.")
+                    return jsonify({'error': f'{nonPluralConfigType.capitalize()} not found.'}), 404
 
-                            # Validate allowed characters
-                            if not all(c.isalnum() or c in [' ', '-', '_', '(', ')'] for c in payload['name']):
-                                logger.warning("Pitch name contains invalid characters during update.")
-                                return jsonify({'error': 'Pitch name contains invalid characters.'}), 400
+            elif request.method == 'DELETE':
+                item_id = request.args.get('id')
+                if not item_id:
+                    logger.error("ID not provided for deletion.")
+                    return jsonify({'error': 'ID is required for deletion.'}), 400
 
-                            if not all(c.isalnum() or c in [' ', '-', '_', '(', ')'] for c in payload['location']):
-                                logger.warning("Pitch location contains invalid characters during update.")
-                                return jsonify({'error': 'Pitch location contains invalid characters.'}), 400
-                            
-                            #update pitch
-                            pitch['name'] = payload['name']
-                            pitch['capacity'] = payload['capacity']
-                            pitch['location'] = payload['location']
-                            pitch['cost'] = payload.get('cost', 0)
-                            pitch['overlaps_with'] = payload.get('overlaps_with', [])
-                            break
-                    else:
-                        logger.error("Pitch not found.")
-                        return jsonify({'error': 'Pitch not found.'}), 404
-                elif request.method == 'DELETE':
-                    # Delete existing pitch
-                    id_to_delete = int(request.args.get('id', 0))
-                    for pitch in items:
-                        if pitch['id'] == id_to_delete:
-                            items.remove(pitch)
-                            logger.info(f"Deleted pitch ID {id_to_delete}: {pitch['name']}")
-                            break
-                    else:
-                        return jsonify({'error': 'Pitch not found.'}), 404
+                original_length = len(config_list)
+                config_list = [item for item in config_list if item['id'] != int(item_id)]
+                if len(config_list) < original_length:
+                    logger.info(f"Deleted {nonPluralConfigType} with ID {item_id}.")
+                else:
+                    logger.error(f"{nonPluralConfigType.capitalize()} not found for deletion.")
+                    return jsonify({'error': f'{nonPluralConfigType.capitalize()} not found.'}), 404
 
-            elif config_type == 'teams':
-                items = data[config_type]
-                if request.method == 'POST':
-                    if len(items) >= 100:
-                        logger.warning("Maximum number of teams reached.")
-                        return jsonify({'error': 'Maximum number of teams (100) reached.'}), 400
-                    
-                    # Create new team
-                    new_team = {
-                        'id': generate_unique_id(items),
-                        'name': payload['name'],
-                        'age_group': payload['age_group'],
-                        'gender': payload['gender']
-                    }
+            # Save updated config back to S3
+            # Use to_dict to exclude 'matches' for pitches
+            if config_type == 'pitches':
+                serializable_config = [Pitch(**item).to_dict() for item in config_list]
+            else:
+                serializable_config = config_list
 
-                    # Generate format_label
-                    new_format_label = Team(**new_team).format_label()
+            save_json_to_s3(user_key, {config_type: serializable_config})
+            response_msg = f'{config_type.capitalize()} saved successfully.'
+            response_data = {'message': response_msg}
 
-                    # Check for duplicate format_label
-                    if any(Team(**item).format_label() == new_format_label for item in items):
-                        logger.warning("Duplicate team format_label detected.")
-                        return jsonify({'error': 'A team with the same name, age group, and gender already exists.'}), 400
-
-                    # Validate input lengths
-                    if len(new_team['name']) > 50 or len(new_team['age_group']) > 20 or len(new_team['gender']) > 10:
-                        logger.warning("Team name, age group, or gender exceeds maximum length.")
-                        return jsonify({'error': 'Team name, age group, or gender exceeds maximum allowed length.'}), 400
-
-                    # Validate allowed characters
-                    if not all(c.isalnum() or c in [' ', '-', '_', '(', ')'] for c in new_team['name']):
-                        logger.warning("Team name contains invalid characters.")
-                        return jsonify({'error': 'Team name contains invalid characters.'}), 400
-
-                    if not all(c.isalnum() or c in [' ', '-', '_', '(', ')'] for c in new_team['age_group']):
-                        logger.warning("Team age group contains invalid characters.")
-                        return jsonify({'error': 'Team age group contains invalid characters.'}), 400
-
-                    if not all(c.isalnum() or c in [' ', '-', '_', '(', ')'] for c in new_team['gender']):
-                        logger.warning("Team gender contains invalid characters.")
-                        return jsonify({'error': 'Team gender contains invalid characters.'}), 400
-
-                    items.append(new_team)
-                    logger.info(f"Created new team: {new_team['name']} with ID {new_team['id']}")
-                elif request.method == 'PUT':
-                    # Update existing team
-                    team_id = int(payload.get('id', 0))
-                    for team in items:
-                        if team['id'] == team_id:
-                            # Generate new format_label
-                            updated_format_label = Team(**payload).format_label()
-
-                            # Check for duplicate format_label excluding current team
-                            if any(Team(**item).format_label() == updated_format_label and item['id'] != team_id for item in items):
-                                logger.warning("Duplicate team format_label detected during update.")
-                                return jsonify({'error': 'A team with the same name, age group, and gender already exists.'}), 400
-
-                            # Validate input lengths
-                            if len(payload['name']) > 50 or len(payload['age_group']) > 20 or len(payload['gender']) > 10:
-                                logger.warning("Team name, age group, or gender exceeds maximum length during update.")
-                                return jsonify({'error': 'Team name, age group, or gender exceeds maximum allowed length.'}), 400
-
-                            # Validate allowed characters
-                            if not all(c.isalnum() or c in [' ', '-', '_' '(', ')'] for c in payload['name']):
-                                logger.warning("Team name contains invalid characters during update.")
-                                return jsonify({'error': 'Team name contains invalid characters.'}), 400
-
-                            if not all(c.isalnum() or c in [' ', '-', '_' '(', ')'] for c in payload['age_group']):
-                                logger.warning("Team age group contains invalid characters during update.")
-                                return jsonify({'error': 'Team age group contains invalid characters.'}), 400
-
-                            if not all(c.isalnum() or c in [' ', '-', '_' '(', ')'] for c in payload['gender']):
-                                logger.warning("Team gender contains invalid characters during update.")
-                                return jsonify({'error': 'Team gender contains invalid characters.'}), 400
-                            
-                            team['name'] = payload['name']
-                            team['age_group'] = payload['age_group']
-                            team['gender'] = payload['gender']
-                            logger.info(f"Updated team ID {team_id}")
-                            break
-                    else:
-                        logger.error("Team not found.")
-                        return jsonify({'error': 'Team not found.'}), 404
-                elif request.method == 'DELETE':
-                    # Delete existing team
-                    id_to_delete = int(request.args.get('id', 0))
-                    for team in items:
-                        if team['id'] == id_to_delete:
-                            items.remove(team)
-                            logger.info(f"Deleted team ID {id_to_delete}: {team['name']}")
-                            break
-                    else:
-                        return jsonify({'error': 'Team not found.'}), 404
-
-            # Save to user-specific file
-            with open(user_file_path, 'w') as f:
-                json.dump({config_type: data[config_type]}, f, indent=4)
-
-            response_data = {'message': f'{config_type.capitalize()} saved successfully.'}
-            if request.method == 'POST' and config_type == 'pitches':
-                response_data['pitch'] = new_pitch
-            elif request.method == 'POST' and config_type == 'teams':
-                response_data['team'] = new_team
+            if request.method == 'POST':
+                response_data[nonPluralConfigType] = new_item
 
             return jsonify(response_data), 200
 

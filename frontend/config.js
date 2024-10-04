@@ -347,6 +347,7 @@ async function handlePitchFormSubmit(event) {
 
     // Generate format_label for the new pitch
     const newPitchFormatLabel = formatPitchLabel(newPitchData);
+
     // Check for duplicate format_label
     const duplicatePitch = allPitches.find(pitch => formatPitchLabel(pitch) === newPitchFormatLabel && (!pitchForm.dataset.editingId || pitch.id !== parseInt(pitchForm.dataset.editingId, 10)));
     if (duplicatePitch) {
@@ -363,6 +364,7 @@ async function handlePitchFormSubmit(event) {
     try {
         if (pitchForm.dataset.editingId) {
             // Update existing pitch
+            newPitchData.id = parseInt(pitchForm.dataset.editingId, 10);
             await saveConfigData('pitches', 'put', { username: currentUser }, newPitchData);
             showAlert('Pitch updated successfully.', 'success');
         } else {
@@ -383,6 +385,11 @@ async function handlePitchFormSubmit(event) {
         selectedOverlaps = [];
         renderSelectedOverlaps();
         delete pitchForm.dataset.editingId;
+        // Clear the 'pitch-id' input field
+        const pitchIdField = document.getElementById('pitch-id');
+        if (pitchIdField) {
+            pitchIdField.value = '';
+        }
     } catch (error) {
         logMessage(error.message, 'error');
         showAlert(`Error: ${error.message}`, 'danger');
@@ -428,6 +435,7 @@ async function handleTeamFormSubmit(event) {
     try {
         if (teamForm.dataset.editingId) {
             // Update existing team
+            newTeamData.id = parseInt(teamForm.dataset.editingId, 10);
             await saveConfigData('teams', 'put', { username: currentUser }, newTeamData);
             showAlert('Team updated successfully.', 'success');
         } else {
@@ -546,10 +554,22 @@ async function handleDeleteItem(item, type) {
             loadPitches();
             const pitchForm = document.getElementById('pitch-details-form');
             pitchForm.reset();
+            delete pitchForm.dataset.editingId;
+            // Clear the 'pitch-id' input field
+            const pitchIdField = document.getElementById('pitch-id');
+            if (pitchIdField) {
+                pitchIdField.value = '';
+            }
         } else if (type === 'teams') {
             loadTeams();
             const teamForm = document.getElementById('team-details-form');
             teamForm.reset();
+            delete teamForm.dataset.editingId;
+            // Clear the 'pitch-id' input field
+            const teamIdField = document.getElementById('team-id');
+            if (teamIdField) {
+                teamIdField.value = '';
+            }
         }
     } catch (error) {
         logMessage(error.message, 'error');
@@ -595,7 +615,7 @@ function addSwipeToDelete(listItem, id, type) {
  */
 function formatPitchLabel(pitch) {
     // Assuming format_label follows the model's format_label method
-    return `${pitch.capacity}aside - ${pitch.location}`;
+    return `${pitch.capacity}aside - ${pitch.name}`;
 }
 
 /**

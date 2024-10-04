@@ -21,20 +21,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Handle login form submission
     const loginForm = document.getElementById('login-form');
-    loginForm.addEventListener('submit', function(event) {
-        event.preventDefault();
-        const usernameInput = document.getElementById('username-input').value.trim();
-        const sanitizedUsername = sanitizeUsername(usernameInput);
-        if (sanitizedUsername) {
-            setCookie('username', sanitizedUsername, 7); // Expires in 7 days
-            document.getElementById('current-user-display').textContent = `Logged in as: ${sanitizedUsername}`;
-            const loginModalInstance = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
-            loginModalInstance.hide();
-            initializeApp(sanitizedUsername);
-        } else {
-            alert('Invalid username. Please use alphanumeric characters only.');
-        }
-    });
+    if (loginForm) {
+        loginForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const usernameInput = document.getElementById('username-input').value.trim();
+            const sanitizedUsername = sanitizeUsername(usernameInput);
+            if (sanitizedUsername) {
+                setCookie('username', sanitizedUsername, 7); // Expires in 7 days
+                document.getElementById('current-user-display').textContent = `Logged in as: ${sanitizedUsername}`;
+                const loginModalInstance = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+                loginModalInstance.hide();
+                initializeApp(sanitizedUsername);
+            } else {
+                alert('Invalid username. Please use alphanumeric characters only.');
+            }
+        });
+    } else {
+        console.error('Login form element not found!');
+    }
 
     // Handle logout
     const logoutButton = document.getElementById('logout-button');

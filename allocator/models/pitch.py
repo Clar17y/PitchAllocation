@@ -38,8 +38,22 @@ class Pitch:
         return True
 
     def format_label(self):
-        return f"{self.capacity}aside - {self.location}"
+        return f"{self.capacity}aside - {self.name}"
     
     def reset_matches(self):
         """Reset all scheduled matches."""
         self.matches = []
+
+    def to_dict(self):
+        """Serialize Pitch object to a dictionary excluding 'matches'."""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'capacity': self.capacity,
+            'location': self.location,
+            'cost': self.cost,
+            'overlaps_with': self.overlaps_with
+        }
+    
+    def __str__(self):
+        return f"Pitch(id={self.id}, name={self.name}, capacity={self.capacity}, location={self.location}, cost={self.cost})"

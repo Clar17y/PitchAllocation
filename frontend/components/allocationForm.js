@@ -12,11 +12,6 @@ let currentUsername = '';
  */
 document.addEventListener('DOMContentLoaded', function() {
     const username = getCookie('username');
-    if (!username) {
-        alert('User not logged in. Redirecting to login.');
-        location.href = '/';
-        return;
-    }
 });
 
 export async function initializeFormComponents(username) {
