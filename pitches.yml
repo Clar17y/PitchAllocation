@@ -1,0 +1,58 @@
+# List of available pitches
+pitches:
+  - name: "Hawes Down Top Left (5)"
+    code: "A"
+    location: "HD TL"
+    capacity: 5
+  - name: "Hawes Down Bottom Left (5)"
+    code: "B"
+    location: "HD BL"
+    capacity: 5
+  - name: "Hawes Down Bottom Right (5)"
+    code: "C"
+    location: "HD BR"
+    capacity: 5
+  - name: "Hawes Down Top Left (7)"
+    code: "D"
+    location: "HD TL"
+    capacity: 7
+  - name: "Hawes Down Top Right (7)"
+    code: "E"
+    location: "HD TR"
+    capacity: 7
+  - name: "Hawes Down Bottom Right (7)"
+    code: "F"
+    location: "HD BR"
+    capacity: 7
+  - name: "Hawes Down Left (9)"
+    code: "G"
+    location: "HD Left"
+    capacity: 9
+  - name: "Hayes Left (9)"
+    code: "H"
+    location: "Hayes Left"
+    capacity: 9
+  - name: "LA Annex (9)"
+    code: "LA"
+    location: "LA Annex"
+    capacity: 9
+  - name: "Hawes Down Left (11)"
+    code: "HDL"
+    location: "HD Left"
+    capacity: 11
+  - name: "Hawes Down Right (11)"
+    code: "HDR"
+    location: "HD Right"
+    capacity: 11
+  - name: "Hayes Right (11)"
+    code: "HR"
+    location: "Hayes Right"
+    capacity: 11
+  - name: "Hayes Left (11)"
+    code: "HL"
+    location: "Hayes Left"
+    capacity: 11
+  - name: "Charles Darwin School (11)"
+    code: "CDS"
+    location: "Charles Darwin School"
+    capacity: 11

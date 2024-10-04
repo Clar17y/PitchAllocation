@@ -1,0 +1,54 @@
+# List of all teams
+teams:
+  Under7s:
+    - TALYBONT
+    - HOFFMANN
+    - PATON
+  Under8s:
+    - MCDOWELL
+    - SOUTHWARK
+    - CAMBERWELL
+    - POPE
+  Under9s:
+    - BRADBURY
+    - BARRY
+    - HARRIS
+    - FORBES
+    - TAYLOR (Girls)
+  Under10s:
+    - HAYES
+    - BILLING
+    - SPENCER
+    - MATTHEWS (Girls)
+    - JEPHSON (Girls)
+  Under11s:
+    - STONE
+    - KENDRICK
+    - ADAMS
+    - KNIGHTS (Girls)
+    - GRAHAM (Girls)
+  Under12s:
+    - MCALISTER
+    - OWLS
+    - BOURNER
+    - DASH (Girls)
+  Under13s:
+    - SMART
+    - PARKINSON
+    - WILSON
+    - SAWYER (Girls)
+    - CARTER (Girls)
+  Under14s:
+    - BEVAN
+    - RICHARDSON (Girls)
+  Under15s:
+    - DATCHELOR
+    - PILGRIM
+    - RAYWORTH (Girls)
+  Under16s:
+    - ROBINSON
+    - BRITTAIN (Girls)
+  Under17/18s:
+    - WHITELEY
+    - MASSEY
+    - BRECON
