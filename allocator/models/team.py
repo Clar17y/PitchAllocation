@@ -12,3 +12,11 @@ class Team:
     
     def __str__(self):
         return f"Team(id={self.id}, name={self.name}, age_group={self.age_group}, gender={self.gender})"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "age_group": self.age_group,
+            "gender": self.gender
+        }

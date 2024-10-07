@@ -2,10 +2,11 @@ import json
 import os
 from flask import Flask, request, jsonify, send_from_directory
 from allocator.allocator_base import Allocator
-from allocator.config_loader import load_pitches, load_teams, save_json_to_s3, get_config_key, get_default_config_key
+from allocator.config_loader import load_pitches, load_teams, load_players, save_json_to_s3, get_config_key, get_default_config_key
 from allocator.logger import setup_logger
 from allocator.models.pitch import Pitch
 from allocator.models.team import Team
+from allocator.models.player import Player
 from datetime import datetime
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
@@ -284,9 +285,9 @@ def get_statistics():
 
 @application.route('/api/config/<config_type>', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def config_handler(config_type):
-    nonPluralConfigType = "pitch" if config_type == "pitches" else "team"
+    nonPluralConfigType = config_type[:-2] if config_type == "pitches" else config_type[:-1]
     # Sanitize config_type to prevent directory traversal or injection
-    if config_type not in ['pitches', 'teams']:
+    if config_type not in ['pitches', 'teams', 'players']:
         logger.error(f"Invalid config type: '{config_type}'")
         return jsonify({'error': 'Invalid config type.'}), 400
 
@@ -302,9 +303,21 @@ def config_handler(config_type):
 
     if request.method == 'GET':
         try:
-            config_data = load_pitches(username=username) if config_type == 'pitches' else load_teams(username=username)
-            # Serialize using to_dict to exclude 'matches'
-            serialized_data = [item.to_dict() for item in config_data] if config_type == 'pitches' else [item.__dict__ for item in config_data]
+            if config_type == 'players':
+                config_data = load_players(username=username)
+            elif config_type == 'pitches':
+                config_data = load_pitches(username=username)
+            elif config_type == 'teams':
+                config_data = load_teams(username=username)
+            
+            serialized_data = []
+            for item in config_data:
+                if config_type == 'pitches':
+                    serialized_data.append(item.to_dict())
+                elif config_type == 'teams':
+                    serialized_data.append(item.__dict__)
+                elif config_type == 'players':
+                    serialized_data.append(item.to_dict())
             return jsonify({config_type: serialized_data}), 200
         except FileNotFoundError:
             return jsonify({'error': f'Default {config_type} config not found.'}), 404
@@ -322,23 +335,42 @@ def config_handler(config_type):
 
             # Load existing data
             try:
-                config_data = load_pitches(username=username) if config_type == 'pitches' else load_teams(username=username)
+                if config_type == 'players':
+                    config_data = load_players(username=username)
+                elif config_type == 'pitches':
+                    config_data = load_pitches(username=username)
+                elif config_type == 'teams':
+                    config_data = load_teams(username=username)
             except FileNotFoundError:
                 # Load default config if user config doesn't exist
                 try:
-                    config_data = load_pitches() if config_type == 'pitches' else load_teams()
+                    if config_type == 'players':
+                        config_data = load_players()
+                    elif config_type == 'pitches':
+                        config_data = load_pitches()
+                    elif config_type == 'teams':
+                        config_data = load_teams()
                 except FileNotFoundError:
-                    config_data = [] if config_type == 'pitches' else []
+                    config_data = []
 
-            # Convert to a mutable type (list of dicts)
-            config_list = [item.to_dict() for item in config_data] if config_type == 'pitches' else [item.__dict__ for item in config_data]
+            # Convert to a mutable type (list of dicts or Player objects)
+            if config_type == 'players':
+                config_list = [item.to_dict() for item in config_data]
+            elif config_type == 'pitches':
+                config_list = [item.to_dict() for item in config_data]
+            elif config_type == 'teams':
+                config_list = [item.__dict__ for item in config_data]
 
+            # Define maximum items and unique fields based on config_type
             if config_type == 'pitches':
                 max_items = 40
                 unique_fields = ['capacity', 'name']
-            else:
+            elif config_type == 'teams':
                 max_items = 100
                 unique_fields = ['name', 'age_group', 'gender']
+            elif config_type == 'players':
+                max_items = 500  # Define a reasonable limit for players
+                unique_fields = ['first_name', 'surname', 'team_id', 'shirt_number']
 
             if request.method == 'POST':
                 if len(config_list) >= max_items:
@@ -349,12 +381,45 @@ def config_handler(config_type):
                 new_id = generate_unique_id(config_list)
                 new_item = {**payload, 'id': new_id}
 
-                # Validate uniqueness
-                if any(all(item[field] == new_item[field] for field in unique_fields) for item in config_list):
+                # Additional unique constraint for players
+                if config_type == 'players':
+                    # Ensure that a player can only belong to one team
+                    existing_player = next((p for p in config_list if p['id'] == new_item['id']), None)
+                    if existing_player:
+                        return jsonify({'error': 'Player ID already exists.'}), 400
+
+                    # Ensure shirt_number is unique within the team
+                    for player in config_list:
+                        if (player['team_id'] == new_item['team_id'] and 
+                            player['shirt_number'] == new_item['shirt_number']):
+                            logger.warning(f"Shirt number {new_item['shirt_number']} already exists in team ID {new_item['team_id']}.")
+                            return jsonify({'error': 'Shirt number already exists in the team.'}), 400
+
+                    # Validate if team_id exists
+                    try:
+                        teams = load_teams(username=username)
+                        if not any(team.id == new_item['team_id'] for team in teams):
+                            logger.warning(f"Team ID {new_item['team_id']} does not exist.")
+                            return jsonify({'error': 'Invalid team_id provided.'}), 400
+                    except Exception as e:
+                        logger.error(f"Error loading teams for validation: {e}")
+                        return jsonify({'error': 'Failed to validate team ID.'}), 500
+
+                # Validate uniqueness based on unique_fields
+                if any(all(player[field] == new_item[field] for field in unique_fields) for player in config_list):
                     logger.warning(f"Duplicate {nonPluralConfigType} detected.")
                     return jsonify({'error': f'A {nonPluralConfigType} with the same {", ".join(unique_fields)} already exists.'}), 400
 
                 # Additional validations can be added here (e.g., input lengths, allowed characters)
+                # For players, ensure 'first_name' and 'surname' are valid
+
+                if config_type == 'players':
+                    # Example: Validate names using regex (already handled in frontend, but double-checking)
+                    name_regex = re.compile(r'^[A-Za-z\s\-]{1,50}$')
+                    if not name_regex.match(new_item['first_name']):
+                        return jsonify({'error': 'Invalid characters in first name.'}), 400
+                    if not name_regex.match(new_item['surname']):
+                        return jsonify({'error': 'Invalid characters in surname.'}), 400
 
                 config_list.append(new_item)
                 logger.info(f"Created new {nonPluralConfigType} with ID {new_id}.")
@@ -365,12 +430,34 @@ def config_handler(config_type):
                     logger.error("ID not provided for update.")
                     return jsonify({'error': 'ID is required for update.'}), 400
 
+                # Find and update the item
                 for item in config_list:
                     if item['id'] == item_id:
-                        # Update fields, excluding 'matches' if present
                         updated_item = {**item, **payload}
-                        # Remove 'matches' if it's part of the payload mistakenly
-                        updated_item.pop('matches', None)
+                        
+                        if config_type == 'players':
+                            # Ensure shirt_number uniqueness within the team
+                            for p in config_list:
+                                if (p['team_id'] == updated_item['team_id'] and 
+                                    p['shirt_number'] == updated_item['shirt_number'] and 
+                                    p['id'] != item_id):
+                                    logger.warning(f"Shirt number {updated_item['shirt_number']} already exists in team ID {updated_item['team_id']}.")
+                                    return jsonify({'error': 'Shirt number already exists in the team.'}), 400
+                            
+                            # Validate if the new team_id exists
+                            teams = load_teams(username=username)
+                            if not any(team.id == updated_item['team_id'] for team in teams):
+                                logger.warning(f"Team ID {updated_item['team_id']} does not exist.")
+                                return jsonify({'error': 'Invalid team_id provided.'}), 400
+
+                            # Validate names
+                            name_regex = re.compile(r'^[A-Za-z\s\-]{1,50}$')
+                            if not name_regex.match(updated_item['first_name']):
+                                return jsonify({'error': 'Invalid characters in first name.'}), 400
+                            if not name_regex.match(updated_item['surname']):
+                                return jsonify({'error': 'Invalid characters in surname.'}), 400
+
+                        # Update the item
                         item.update(updated_item)
                         logger.info(f"Updated {nonPluralConfigType} with ID {item_id}.")
                         break
@@ -393,11 +480,13 @@ def config_handler(config_type):
                     return jsonify({'error': f'{nonPluralConfigType.capitalize()} not found.'}), 404
 
             # Save updated config back to S3
-            # Use to_dict to exclude 'matches' for pitches
-            if config_type == 'pitches':
+            # Use to_dict to ensure proper serialization
+            if config_type == 'players':
+                serializable_config = [Player(**item).to_dict() for item in config_list]
+            elif config_type == 'pitches':
                 serializable_config = [Pitch(**item).to_dict() for item in config_list]
-            else:
-                serializable_config = config_list
+            elif config_type == 'teams':
+                serializable_config = [Team(**item).to_dict() for item in config_list]
 
             save_json_to_s3(user_key, {config_type: serializable_config})
             response_msg = f'{config_type.capitalize()} saved successfully.'

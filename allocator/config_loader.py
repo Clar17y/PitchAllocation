@@ -1,10 +1,10 @@
 import json  # Import JSON library alongside YAML
 import os
-import re
 import boto3
 from botocore.exceptions import ClientError
 from allocator.models.pitch import Pitch
 from allocator.models.team import Team
+from allocator.models.player import Player
 from allocator.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -106,3 +106,48 @@ def load_teams(username=None):
     
     logger.info(f"Loaded {len(teams)} teams from S3.")
     return teams
+
+def load_players(username=None):
+    """
+    Load players from S3. If username is provided, load user-specific players.
+    Otherwise, load default players.
+    """
+    if username:
+        key = get_config_key('players', username)
+    else:
+        key = get_default_config_key('players')
+    
+    try:
+        all_players_data = load_json_from_s3(key)
+    except FileNotFoundError:
+        logger.warning(f"{key} not found. Loading default players.")
+        key = get_default_config_key('players')
+        all_players_data = load_json_from_s3(key)
+    except s3_client.exceptions.NoSuchKey:
+        logger.warning(f"Players config not found for key: {key}")
+        return []
+    except Exception as e:
+        logger.error(f"Error loading players: {e}")
+        raise e
+    
+    logger.info(f"all_players_data: {all_players_data}")
+    players = [Player(**player) for player in all_players_data['players']]
+    return players 
+
+def save_players(username, players):
+    """
+    Save players to S3. If username is provided, save to user-specific key.
+    Otherwise, save to default.
+    """
+    if username:
+        key = get_config_key('players', username)
+    else:
+        key = get_default_config_key('players')
+    
+    players_data = [player.to_dict() for player in players]
+    try:
+        s3_client.put_object(Bucket=S3_BUCKET, Key=key, Body=json.dumps(players_data))
+        logger.info(f"Players config saved to {key}.")
+    except Exception as e:
+        logger.error(f"Error saving players: {e}")
+        raise e
