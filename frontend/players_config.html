@@ -1,0 +1,152 @@
+<!-- frontend/players_config.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Players Configuration</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Include Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        /* Custom styles for players config page */
+        .list-group-item {
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .delete-button {
+            position: absolute;
+            top: 0;
+            right: -80px;
+            height: 100%;
+            width: 80px;
+            background-color: #dc3545; /* Bootstrap's danger color */
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: right 0.3s ease;
+            cursor: pointer;
+        }
+
+        .list-group-item.show-delete .delete-button {
+            right: 0;
+        }
+
+        .list-group-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        #toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1055; /* Above other elements but below modals */
+        }
+
+        /* Optional: Add similar styles from config.html for consistency */
+        .list-group-item {
+            margin-bottom: 10px; /* Adds space below each list item */
+            padding: 15px; /* Increases padding within each list item */
+            border-radius: 5px; /* Optional: Rounded corners for aesthetics */
+        }
+
+        .list-group-item:last-child {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Team Allocation</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Allocate Teams</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/frontend/statistics.html">Statistics</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/frontend/config.html">Config</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="/frontend/players_config.html">Players</a>
+                    </li>
+                </ul>
+                <span class="navbar-text me-3" id="current-user-display">
+                    <!-- Username will be displayed here -->
+                </span>
+                <button class="btn btn-outline-secondary" id="logout-button" style="display: none;">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Players Config Container -->
+    <div class="container my-5">
+        <h1 class="text-center mb-4">Players Configuration</h1>
+
+        <div class="row">
+            <!-- Players List Section -->
+            <div class="col-lg-6 col-md-12 mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3>Players</h3>
+                    <button class="btn btn-primary" id="create-player-button">Create Player</button>
+                </div>
+                <ul class="list-group scrollable-list" id="players-list">
+                    <!-- Players will be populated here -->
+                </ul>
+            </div>
+
+            <!-- Player Details -->
+            <div class="col-lg-6 col-md-12 mb-4">
+                <h3>Player Details</h3>
+                <form id="player-details-form">
+                    <!-- Read-Only ID Field -->
+                    <div class="mb-3">
+                        <label for="player-id" class="form-label">Player ID:</label>
+                        <input type="text" id="player-id" name="id" class="form-control" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="player-first-name" class="form-label">First Name</label>
+                        <input type="text" class="form-control" id="player-first-name" maxlength="50" required pattern="[a-zA-Z\s\-]{1,50}" title="Letters, spaces, and hyphens only, up to 50 characters.">
+                    </div>
+                    <div class="mb-3">
+                        <label for="player-surname" class="form-label">Surname</label>
+                        <input type="text" class="form-control" id="player-surname" maxlength="50" required pattern="[a-zA-Z\s\-]{1,50}" title="Letters, spaces, and hyphens only, up to 50 characters.">
+                    </div>
+                    <div class="mb-3">
+                        <label for="player-team" class="form-label">Team</label>
+                        <select class="form-select form-select-config" id="player-team" required>
+                            <option value="" disabled selected>Select Team</option>
+                            <!-- Teams will be populated here with format_label -->
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="player-shirt-number" class="form-label">Shirt Number</label>
+                        <input type="number" class="form-control" id="player-shirt-number" min="1" max="99" required>
+                    </div>
+                    <button type="submit" class="btn btn-success">Save Player</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true">
+        <!-- Toasts will be dynamically added here -->
+    </div>
+
+    <script type="module" src="/frontend/players_config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

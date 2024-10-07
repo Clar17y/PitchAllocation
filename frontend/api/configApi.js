@@ -2,7 +2,7 @@
 
 /**
  * Fetch Config Data
- * @param {string} configType - 'pitches' or 'teams'
+ * @param {string} configType - 'pitches', 'teams', or 'players'
  * @param {string} method - 'get', 'post', 'put', 'delete'
  * @param {object} queryParams - Additional query parameters
  * @param {object} payload - Data to send for 'post', 'put', or 'delete'
@@ -39,7 +39,7 @@ export async function fetchConfigData(configType, method, queryParams = {}, payl
 
 /**
  * Save Config Data
- * @param {string} configType - 'pitches' or 'teams'
+ * @param {string} configType - 'pitches', 'teams', or 'players'
  * @param {string} method - 'post' or 'put'
  * @param {object} queryParams - Additional query parameters
  * @param {object} payload - Data to send
@@ -51,7 +51,7 @@ export async function saveConfigData(configType, method, queryParams = {}, paylo
 
 /**
  * Delete Config Data
- * @param {string} configType - 'pitches' or 'teams'
+ * @param {string} configType - 'pitches', 'teams', or 'players'
  * @param {string} method - 'delete'
  * @param {object} queryParams - Query parameters must include 'id' and 'username'
  * @returns {Promise<object>}
