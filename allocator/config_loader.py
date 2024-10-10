@@ -1,153 +1,138 @@
-import json  # Import JSON library alongside YAML
-import os
-import boto3
-from botocore.exceptions import ClientError
-from allocator.models.pitch import Pitch
-from allocator.models.team import Team
-from allocator.models.player import Player
+from models import db
+from models.pitch import Pitch
+from models.team import Team
+from models.player import Player
 from allocator.logger import setup_logger
+from flask_login import current_user
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = setup_logger(__name__)
 
-# S3 Configuration
-S3_BUCKET = 'owpitchalloc'  # Ensure this matches your bucket name
-s3_client = boto3.client('s3')
+def load_pitches():
+    """Load pitches from the PostgreSQL database."""
+    user_id = current_user.id if current_user.is_authenticated else None
+    if not user_id:
+        logger.error("User not authenticated.")
+        raise PermissionError("User not authenticated.")
 
-# Determine the absolute path to the directory containing config_loader.py
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-def load_json_from_s3(key):
-    """Load JSON data from s3."""
     try:
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
-        data = response['Body'].read().decode('utf-8')
-        return json.loads(data)
-    except ClientError as e:
-        logger.error(f"Failed to load {key} from S3: {e}")
-        raise FileNotFoundError(f"File {key} not found in S3.")
+        pitches = Pitch.query.filter_by(user_id=user_id).all()
+        if not pitches:
+            logger.warning(f"No pitches found for user_id {user_id}.")
+        # Ensure that each Pitch instance has a 'format_label' method
+        all_pitches = {pitch.format_label(): pitch for pitch in pitches}
+        allowed_pitch_labels = set(all_pitches.keys())
 
-def save_json_to_s3(key, data):
-    """Save JSON data to S3."""
-    try:
-        s3_client.put_object(
-            Bucket=S3_BUCKET,
-            Key=key,
-            Body=json.dumps(data, indent=4),
-            ContentType='application/json'
-        )
-        logger.info(f"Successfully saved {key} to S3.")
-    except ClientError as e:
-        logger.error(f"Failed to save {key} to S3: {e}")
+        filtered_pitches = []
+        for label in allowed_pitch_labels:
+            pitch = all_pitches.get(label)
+            if pitch:
+                filtered_pitches.append(pitch)
+            else:
+                logger.warning(f"Pitch with label '{label}' not found.")
+
+        # Sort pitches by capacity: 5-aside, 7-aside, 9-aside, then 11-aside
+        filtered_pitches.sort(key=lambda pitch: {5: 0, 7: 1, 9: 2, 11: 3}.get(pitch.capacity, 4))
+        logger.info(f"Loaded {len(filtered_pitches)} pitches from the database.")
+
+        return filtered_pitches
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database error while loading pitches: {e}")
         raise e
 
-def get_config_key(config_type, username):
-    """Generate S3 key for the configuration file."""
-    return f"configs/{username}/{config_type}.json"
+def load_teams():
+    """Load teams from the PostgreSQL database."""
+    user_id = current_user.id if current_user.is_authenticated else None
+    if not user_id:
+        logger.error("User not authenticated.")
+        raise PermissionError("User not authenticated.")
 
-def get_default_config_key(config_type):
-    """Generate S3 key for the default configuration file."""
-    return f"configs/{config_type}.json"
-
-def load_pitches(username=None):
-    """Load pitches from S3."""
-    if username:
-        key = get_config_key('pitches', username)
-    else:
-        key = get_default_config_key('pitches')
-    
     try:
-        all_pitches_data = load_json_from_s3(key)
-    except FileNotFoundError:
-        logger.warning(f"{key} not found. Loading default pitches.")
-        key = get_default_config_key('pitches')
-        all_pitches_data = load_json_from_s3(key)
-    
-    all_pitches = {Pitch(**pitch).format_label(): Pitch(**pitch) for pitch in all_pitches_data['pitches']}
-    allowed_pitch_labels = set(all_pitches.keys())
+        teams = Team.query.filter_by(user_id=user_id).all()
+        if not teams:
+            logger.warning(f"No teams found for user_id {user_id}.")
 
-    filtered_pitches = []
-    for label in allowed_pitch_labels:
-        pitch = all_pitches.get(label)
-        if pitch:
-            filtered_pitches.append(pitch)
-        else:
-            logger.warning(f"Pitch with label '{label}' not found in {key}.")
+        team_list = []
+        for team in teams:
+            team_list.append({
+                'id': team.id,
+                'name': team.name,
+                'age_group': team.age_group,
+                'gender': team.gender,
+                'girls': team.girls,
+                'overlaps_with': team.overlaps_with,
+                'display_label': team.format_label()
+            })
+        
+        logger.info(f"Loaded {len(team_list)} teams from the database.")
+        return team_list
 
-    # Sort pitches by capacity: 5-aside, 7-aside, 9-aside, then 11-aside
-    filtered_pitches.sort(key=lambda pitch: {5: 0, 7: 1, 9: 2, 11: 3}.get(pitch.capacity, 4))
-    logger.info(f"Loaded {len(filtered_pitches)} pitches from S3.")
-
-    return filtered_pitches
-
-def load_teams(username=None):
-    """Load teams from S3."""
-    if username:
-        key = get_config_key('teams', username)
-    else:
-        key = get_default_config_key('teams')
-    
-    try:
-        teams_data = load_json_from_s3(key)
-    except FileNotFoundError:
-        logger.warning(f"{key} not found. Loading default teams.")
-        key = get_default_config_key('teams')
-        teams_data = load_json_from_s3(key)
-    
-    teams = []
-    for team in teams_data['teams']:
-        try:
-            id = team['id']
-            name = team['name']
-            age = team['age_group']
-            gender = team['gender']
-            teams.append(Team(id, name, age, gender))
-        except ValueError:
-            logger.error(f"Invalid team format: '{team}'. Expected JSON.")
-    
-    logger.info(f"Loaded {len(teams)} teams from S3.")
-    return teams
-
-def load_players(username=None):
-    """
-    Load players from S3. If username is provided, load user-specific players.
-    Otherwise, load default players.
-    """
-    if username:
-        key = get_config_key('players', username)
-    else:
-        key = get_default_config_key('players')
-    
-    try:
-        all_players_data = load_json_from_s3(key)
-    except FileNotFoundError:
-        logger.warning(f"{key} not found. Loading default players.")
-        key = get_default_config_key('players')
-        all_players_data = load_json_from_s3(key)
-    except s3_client.exceptions.NoSuchKey:
-        logger.warning(f"Players config not found for key: {key}")
-        return []
-    except Exception as e:
-        logger.error(f"Error loading players: {e}")
+    except SQLAlchemyError as e:
+        logger.error(f"Database error while loading teams: {e}")
         raise e
-    
-    logger.info(f"all_players_data: {all_players_data}")
-    players = [Player(**player) for player in all_players_data['players']]
-    return players 
 
-def save_players(username, players):
-    """
-    Save players to S3. If username is provided, save to user-specific key.
-    Otherwise, save to default.
-    """
-    if username:
-        key = get_config_key('players', username)
-    else:
-        key = get_default_config_key('players')
-    
-    players_data = [player.to_dict() for player in players]
+def load_players():
+    """Load players from the PostgreSQL database."""
+    user_id = current_user.id if current_user.is_authenticated else None
+    if not user_id:
+        logger.error("User not authenticated.")
+        raise PermissionError("User not authenticated.")
+
     try:
-        s3_client.put_object(Bucket=S3_BUCKET, Key=key, Body=json.dumps(players_data))
-        logger.info(f"Players config saved to {key}.")
-    except Exception as e:
-        logger.error(f"Error saving players: {e}")
+        players = Player.query.filter_by(user_id=user_id).all()
+        if not players:
+            logger.warning(f"No players found for user_id {user_id}.")
+
+        player_list = []
+        for player in players:
+            player_list.append({
+                'id': player.id,
+                'first_name': player.first_name,
+                'surname': player.surname,
+                'team_id': player.team_id,
+                'shirt_number': player.shirt_number
+            })
+        
+        logger.info(f"Loaded {len(player_list)} players from the database.")
+        return player_list
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database error while loading players: {e}")
+        raise e
+
+def save_players(players):
+    """Save or update players in the PostgreSQL database."""
+    user_id = current_user.id if current_user.is_authenticated else None
+    if not user_id:
+        logger.error("User not authenticated.")
+        raise PermissionError("User not authenticated.")
+
+    try:
+        for player_data in players:
+            player = Player.query.filter_by(id=player_data['id'], user_id=user_id).first()
+            if player:
+                # Update existing player
+                player.first_name = player_data['first_name']
+                player.surname = player_data['surname']
+                player.team_id = player_data['team_id']
+                player.shirt_number = player_data['shirt_number']
+                logger.info(f"Updated player ID {player.id}.")
+            else:
+                # Create a new player
+                new_player = Player(
+                    first_name=player_data['first_name'],
+                    surname=player_data['surname'],
+                    team_id=player_data['team_id'],
+                    shirt_number=player_data['shirt_number'],
+                    user_id=user_id
+                )
+                db.session.add(new_player)
+                logger.info(f"Added new player: {new_player.first_name} {new_player.surname}.")
+
+        db.session.commit()
+        logger.info("All players have been successfully saved.")
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error(f"Database error while saving players: {e}")
         raise e

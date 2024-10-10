@@ -1,35 +1,105 @@
-import json
-import os
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for, flash
+from flask_login import login_user, current_user, logout_user, login_required
+from models import db, bcrypt, login_manager
 from allocator.allocator_base import Allocator
-from allocator.config_loader import load_pitches, load_teams, load_players, save_json_to_s3, get_config_key, get_default_config_key
+from allocator.config_loader import load_pitches, load_teams, load_players, save_players
 from allocator.logger import setup_logger
-from allocator.models.pitch import Pitch
-from allocator.models.team import Team
-from allocator.models.player import Player
+from models.pitch import Pitch
+from models.team import Team
+from models.player import Player
+from models.user import User
+from models.allocation import Allocation
 from datetime import datetime
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 import re
 
 application = Flask(__name__)
+application.config.from_object('config.Config')
 logger = setup_logger(__name__)
+
+# Initialize extensions
+db.init_app(application)
+bcrypt.init_app(application)
+login_manager.init_app(application)
+
+logger = setup_logger(__name__)
+
+# Create database tables
+with application.app_context():
+    db.create_all()
 
 # Let's use S3 for storage
 s3 = boto3.client('s3')
 BUCKET_NAME = 'owpitchalloc'
 
-@application.route('/api/teams', methods=['GET'])
-def get_teams():
-    username = request.args.get('username')
-    if not username:
-        logger.error("Username not provided in query parameters.")
-        return jsonify({'error': 'Username is required.'}), 400
+# Routes for Authentication
+@application.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('serve_index'))
+    if request.method == 'POST':
+        name = request.form.get('username')
+        password = request.form.get('password')
+        
+        if not name or not password:
+            flash('Please fill out both fields.', 'warning')
+            return redirect(url_for('register'))
+        
+        existing_user = User.query.filter_by(name=name).first()
+        if existing_user:
+            flash('Username already exists. Please choose a different one.', 'danger')
+            return redirect(url_for('register'))
+        
+        new_user = User(name=name)
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.commit()
+        flash('Account created successfully! Please log in.', 'success')
+        return redirect(url_for('login'))
     
+    return render_template('register.html')
+
+@application.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('serve_index'))
+    if request.method == 'POST':
+        name = request.form.get('username')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(name=name).first()
+        if user and user.check_password(password):
+            login_user(user)
+            flash('Logged in successfully!', 'success')
+            next_page = request.args.get('next')
+            return redirect(next_page) if next_page else redirect(url_for('serve_index'))
+        else:
+            flash('Login Unsuccessful. Please check username and password.', 'danger')
+    
+    return render_template('login.html')
+
+@application.route('/api/current_user', methods=['GET'])
+@login_required
+def get_current_user():
+    return jsonify({
+        'id': current_user.id,
+        'name': current_user.name
+    }), 200
+
+@application.route('/logout')
+def logout():
+    logout_user()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
+@application.route('/api/teams', methods=['GET'])
+@login_required
+def get_teams():
     try:
-        teams = load_teams(username=username)
+        teams = load_teams()
     except Exception as e:
-        logger.error(f"Failed to load teams for user '{username}': {e}")
+        logger.error(f"Failed to load teams for user '{current_user.name}': {e}")
         return jsonify({'error': 'Failed to load teams.'}), 500
 
     teams_data = []
@@ -44,16 +114,12 @@ def get_teams():
     return jsonify({'teams': teams_data})
 
 @application.route('/api/pitches', methods=['GET'])
+@login_required
 def get_pitches():
-    username = request.args.get('username')
-    if not username:
-        logger.error("Username not provided in query parameters.")
-        return jsonify({'error': 'Username is required.'}), 400
-    
     try:
-        pitches = load_pitches(username=username)
+        pitches = load_pitches()
     except Exception as e:
-        logger.error(f"Failed to load pitches for user '{username}': {e}")
+        logger.error(f"Failed to load pitches for user '{current_user.name}': {e}")
         return jsonify({'error': 'Failed to load pitches.'}), 500
 
     pitches_data = []
@@ -70,6 +136,7 @@ def get_pitches():
     return jsonify({'pitches': pitches_data})
 
 @application.route('/api/allocate', methods=['POST'])
+@login_required
 def allocate():
     # Retrieve username from cookies
     username = request.cookies.get('username')
@@ -216,14 +283,17 @@ def save_allocation_results(username, date_str, allocations):
         logger.error(f"Failed to save allocation results for user '{username}': {e}")
 
 @application.route('/', methods=['GET'])
+@login_required
 def serve_index():
     return send_from_directory('frontend', 'index.html')
 
 @application.route('/frontend/<path:filename>', methods=['GET'])
+@login_required
 def serve_static(filename):
     return send_from_directory('frontend', filename)
 
 @application.route('/api/statistics', methods=['GET'])
+@login_required
 def get_statistics():
     """
     Fetches all allocation results for the current user from the Output directory
@@ -232,17 +302,9 @@ def get_statistics():
     allocations = []
     try:
         # Retrieve username from cookies
-        username = request.cookies.get('username')
+        username = current_user.name
         if not username:
-            logger.error("Username not found in cookies.")
             return jsonify({'error': 'User not authenticated.'}), 401
-
-        logger.debug(f"Retrieved username from cookies: '{username}'")
-
-        # Sanitize the username to prevent directory traversal or injection
-        if not re.match(r'^[a-zA-Z0-9]+$', username):
-            logger.error(f"Invalid username format: '{username}'.")
-            return jsonify({'error': 'Invalid username format.'}), 400
 
         response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"allocations/{username}/")
         user_files = response.get('Contents', [])
@@ -284,6 +346,7 @@ def get_statistics():
     return jsonify({'allocations': allocations})
 
 @application.route('/api/config/<config_type>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@login_required
 def config_handler(config_type):
     nonPluralConfigType = config_type[:-2] if config_type == "pitches" else config_type[:-1]
     # Sanitize config_type to prevent directory traversal or injection
@@ -291,10 +354,7 @@ def config_handler(config_type):
         logger.error(f"Invalid config type: '{config_type}'")
         return jsonify({'error': 'Invalid config type.'}), 400
 
-    username = request.cookies.get('username')
-    if not username:
-        logger.error("Username not found in cookies.")
-        return jsonify({'error': 'Username is required.'}), 400
+    username = current_user.name
 
     user_key = get_config_key(config_type, username)
     default_key = get_default_config_key(config_type)
@@ -500,6 +560,14 @@ def config_handler(config_type):
         except Exception as e:
             logger.error(f"Error handling {config_type} config: {str(e)}")
             return jsonify({'error': 'Internal server error.'}), 500
+
+@application.route('/register.html')
+def register_page():
+    return render_template('register.html')
+
+@application.route('/login.html')
+def login_page():
+    return render_template('login.html')
 
 def generate_unique_id(items):
     """Generate a unique ID for a new item."""

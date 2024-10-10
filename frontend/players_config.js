@@ -2,6 +2,14 @@
 
 import { fetchConfigData, saveConfigData, deleteConfigData } from './api/configApi.js';
 import { logMessage } from './utils/logger.js';
+import { getCookie } from './utils/cookie.js';
+
+// Check if user is authenticated
+const username = getCookie('username');
+if (!username) {
+    alert('You must be logged in to access this page.');
+    window.location.href = '/login.html';
+}
 
 // DOM Elements
 const playersList = document.getElementById('players-list');

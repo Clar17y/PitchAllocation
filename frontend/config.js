@@ -10,12 +10,25 @@ let allPitches = [];         // Stores all available pitches
 let allTeams = [];
 let selectedOverlaps = [];   // Stores selected overlap pitch IDs
 
-document.addEventListener('DOMContentLoaded', function() {
-    currentUser = getCookie('username');
-    if (!currentUser) {
-        alert('User not logged in. Redirecting to login.');
-        location.href = '/';
-        return;
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const response = await fetch('/api/current_user', {
+            method: 'GET',
+            credentials: 'include'  // Include cookies in the request
+        });
+
+        if (response.status === 200) {
+            const data = await response.json();
+            document.getElementById('current-user-display').textContent = `Logged in as: ${data.name}`;
+            document.getElementById('logout-button').style.display = 'inline-block';
+            currentUser = data.name;
+        } else {
+            // Redirect to login if not authenticated
+            window.location.href = '/login.html';
+        }
+    } catch (error) {
+        console.error('Error fetching current user:', error);
+        window.location.href = '/login.html';
     }
 
     document.getElementById('current-user-display').textContent = `Logged in as: ${currentUser}`;

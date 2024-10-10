@@ -5,18 +5,24 @@ import { initializeStatistics } from './components/statistics.js';
 import { copyResults } from './utils/helpers.js';
 import { setCookie, getCookie, eraseCookie } from './utils/cookie.js';
 
-document.addEventListener('DOMContentLoaded', function() {
-    const username = getCookie('username');
-    if (!username) {
-        // Show login modal if username is not set
-        const loginModal = new bootstrap.Modal(document.getElementById('loginModal'), {
-            backdrop: 'static',
-            keyboard: false
+document.addEventListener('DOMContentLoaded', async() => {
+    try {
+        const response = await fetch('/api/current_user', {
+            method: 'GET',
+            credentials: 'include'  // Include cookies in the request
         });
-        loginModal.show();
-    } else {
-        // Initialize the app for the logged-in user
-        initializeApp(username);
+
+        if (response.status === 200) {
+            const data = await response.json();
+            document.getElementById('current-user-display').textContent = `Logged in as: ${data.name}`;
+            document.getElementById('logout-button').style.display = 'inline-block';
+        } else {
+            // Redirect to login if not authenticated
+            window.location.href = '/login.html';
+        }
+    } catch (error) {
+        console.error('Error fetching current user:', error);
+        window.location.href = '/login.html';
     }
 
     // Handle login form submission

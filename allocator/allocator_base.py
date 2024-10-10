@@ -3,18 +3,26 @@ from datetime import datetime, timedelta
 import re  # Import regular expressions
 from allocator.utils import get_datetime, get_pitch_type, get_duration, format_age_group
 from allocator.logger import setup_logger
+from models.team import Team
+from models.pitch import Pitch
+from models.player import Player
+from models.allocation import Allocation
+from models import db
 
 logger = setup_logger(__name__)
 
 class Allocator:
-    def __init__(self, pitches, teams, config, start_time=None, end_time=None):
-        self.pitches = pitches
-        self.teams = teams
+    def __init__(self, user_id, config):
+        self.user_id = user_id
         self.config = config
-        
+
         reference_date = datetime.today().date()
-        self.start_time = get_datetime(start_time, config.get('start_time', "10:00"), reference_date)
-        self.end_time = get_datetime(end_time, config.get('end_time', "14:00"), reference_date)
+        self.start_time = get_datetime(config.get('start_time'), "10:00", reference_date)
+        self.end_time = get_datetime(config.get('end_time'), "14:00", reference_date)
+
+        # Query pitches and teams from the database
+        self.pitches = Pitch.query.filter_by(user_id=self.user_id).all()
+        self.teams = Team.query.filter_by(user_id=self.user_id).all()
 
         self.pitch_name_map = self.create_pitch_name_map()
         self.pitch_id_map = { pitch.id: pitch for pitch in self.pitches }
@@ -59,8 +67,9 @@ class Allocator:
         """Reset allocations and unallocated teams."""
         self.allocations = []
         self.unallocated_teams = []
-        for pitch in self.pitches:
-            pitch.reset_matches()
+        # Remove existing allocations from the database
+        Allocation.query.filter_by(user_id=self.user_id).delete()
+        db.session.commit()
 
     def prepare_teams(self):
         teams_with_pref = []
@@ -95,23 +104,11 @@ class Allocator:
             logger.error("Team ID missing in team_entry.")
             return None
 
-        team = next((t for t in self.teams if t.id == int(team_id)), None)
+        team = Team.query.filter_by(id=int(team_id), user_id=self.user_id).first()
         if not team:
             logger.warning(f"Team ID '{team_id}' not found in teams list.")
         return team
     
-    def get_team_from_name(self, name):
-        for team in self.teams:
-            if team.name in name and format_age_group(team.age_group) in name:
-                return team
-        return None
-    
-    def get_pitch_from_name(self, name):
-        for pitch in self.pitches:
-            if pitch.name in name:
-                return pitch
-        return None
-
     def parse_preferred_time(self, preferred_time):
         try:
             return get_datetime(preferred_time, None, self.start_time.date())
@@ -183,14 +180,14 @@ class Allocator:
             if pitch.capacity != pitch_type:
                 continue
 
-            if not pitch.is_available(start_time, duration):
+            if not self.is_pitch_available(pitch, start_time, duration):
                 continue
 
             # Check overlapping pitches
-            overlapping = [self.pitch_id_map[pid] for pid in pitch.overlaps_with if pid in self.pitch_id_map]
+            overlapping = Pitch.query.filter(Pitch.id.in_(pitch.overlaps_with)).all()
             overlap_conflict = False
             for overlapping_pitch in overlapping:
-                if overlapping_pitch.is_available(start_time, duration) is False:
+                if not self.is_pitch_available(overlapping_pitch, start_time, duration):
                     overlap_conflict = True
                     logger.info(f"Cannot allocate {team.format_label()} to '{pitch.format_label()}' because overlapping pitch '{overlapping_pitch.format_label()}' is occupied at {start_time.strftime('%H:%M')}.")
                     break
@@ -198,9 +195,20 @@ class Allocator:
                 continue
 
             # Allocate the team to the pitch
-            pitch.add_match(team, start_time, duration)
+            # Create a new Allocation record
+            new_allocation = Allocation(
+                date=start_time.date(),
+                start_time=start_time.time(),
+                end_time=start_time + duration,
+                user_id=self.user_id,
+                pitch_id=pitch.id,
+                team_id=team.id
+            )
+            db.session.add(new_allocation)
+            db.session.commit()
+
             self.allocations.append({
-                'time': start_time.strftime("%I:%M%p").lower(),
+                'start_time': start_time.strftime("%I:%M%p").lower(),
                 'team': team.format_label(),
                 'pitch': f"{pitch.format_label()}",
                 'preferred': preferred
@@ -209,6 +217,16 @@ class Allocator:
             return True
 
         return False
+
+    def is_pitch_available(self, pitch, start_time, duration):
+        end_time = datetime.combine(start_time.date(), start_time.time()) + duration
+        existing_allocations = Allocation.query.filter_by(pitch_id=pitch.id, date=start_time.date()).all()
+        for alloc in existing_allocations:
+            alloc_start = datetime.combine(alloc.date, alloc.time)
+            alloc_end = alloc_start + duration
+            if (start_time < alloc_end and end_time > alloc_start):
+                return False
+        return True
 
     def log_unallocated_teams(self):
         if self.unallocated_teams:
@@ -227,7 +245,7 @@ class Allocator:
         # Group allocations by pitch capacity
         allocations_by_capacity = {}
         for alloc in self.allocations:
-            pitch = next((p for p in self.pitches if p.format_label() == alloc['pitch']), None)
+            pitch = Pitch.query.get_by_label(alloc['pitch'], self.user_id)
             if pitch:
                 capacity = pitch.capacity
                 if capacity not in allocations_by_capacity:
