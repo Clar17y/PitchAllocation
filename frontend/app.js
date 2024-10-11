@@ -5,17 +5,21 @@ import { initializeStatistics } from './components/statistics.js';
 import { copyResults } from './utils/helpers.js';
 import { setCookie, getCookie, eraseCookie } from './utils/cookie.js';
 
+let currentUser = '';
+
 document.addEventListener('DOMContentLoaded', async() => {
     try {
         const response = await fetch('/api/current_user', {
             method: 'GET',
-            credentials: 'include'  // Include cookies in the request
+            credentials: 'include'  
         });
 
         if (response.status === 200) {
             const data = await response.json();
-            document.getElementById('current-user-display').textContent = `Logged in as: ${data.name}`;
+            currentUser = data.name;
+            document.getElementById('current-user-display').textContent = `Logged in as: ${currentUser}`;
             document.getElementById('logout-button').style.display = 'inline-block';
+            initializeApp();
         } else {
             // Redirect to login if not authenticated
             window.location.href = '/login.html';
@@ -23,27 +27,6 @@ document.addEventListener('DOMContentLoaded', async() => {
     } catch (error) {
         console.error('Error fetching current user:', error);
         window.location.href = '/login.html';
-    }
-
-    // Handle login form submission
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) {
-        loginForm.addEventListener('submit', function(event) {
-            event.preventDefault();
-            const usernameInput = document.getElementById('username-input').value.trim();
-            const sanitizedUsername = sanitizeUsername(usernameInput);
-            if (sanitizedUsername) {
-                setCookie('username', sanitizedUsername, 7); // Expires in 7 days
-                document.getElementById('current-user-display').textContent = `Logged in as: ${sanitizedUsername}`;
-                const loginModalInstance = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
-                loginModalInstance.hide();
-                initializeApp(sanitizedUsername);
-            } else {
-                alert('Invalid username. Please use alphanumeric characters only.');
-            }
-        });
-    } else {
-        console.error('Login form element not found!');
     }
 
     // Handle logout
@@ -54,16 +37,10 @@ document.addEventListener('DOMContentLoaded', async() => {
     });
 });
 
-/**
- * Initializes the application after successful login.
- * @param {string} username - The logged-in user's name.
- */
-function initializeApp(username) {
-    document.getElementById('current-user-display').textContent = `Logged in as: ${username}`;
-    document.getElementById('logout-button').style.display = 'inline-block';
 
+function initializeApp() {
     if (!window.location.pathname.endsWith('statistics.html')) {
-        initializeFormComponents(username);
+        initializeFormComponents();
         
         // Attach clearSelections to the clear button
         const clearButton = document.getElementById('clear-button');
@@ -78,7 +55,7 @@ function initializeApp(username) {
         }
     } else {
         console.log('Fetching statistics');
-        initializeStatistics(username);
+        initializeStatistics();
     }
 }
 

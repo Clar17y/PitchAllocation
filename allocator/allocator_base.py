@@ -1,6 +1,6 @@
 import random
 from datetime import datetime, timedelta
-import re  # Import regular expressions
+from flask_login import current_user
 from allocator.utils import get_datetime, get_pitch_type, get_duration, format_age_group
 from allocator.logger import setup_logger
 from models.team import Team
@@ -12,8 +12,8 @@ from models import db
 logger = setup_logger(__name__)
 
 class Allocator:
-    def __init__(self, user_id, config):
-        self.user_id = user_id
+    def __init__(self, pitches, teams, config):
+        self.user_id = current_user.id
         self.config = config
 
         reference_date = datetime.today().date()
@@ -21,8 +21,10 @@ class Allocator:
         self.end_time = get_datetime(config.get('end_time'), "14:00", reference_date)
 
         # Query pitches and teams from the database
-        self.pitches = Pitch.query.filter_by(user_id=self.user_id).all()
-        self.teams = Team.query.filter_by(user_id=self.user_id).all()
+        # self.pitches = Pitch.query.filter_by(user_id=self.user_id).all()
+        self.pitches = pitches
+        #self.teams = Team.query.filter_by(user_id=self.user_id).all()
+        self.teams = teams
 
         self.pitch_name_map = self.create_pitch_name_map()
         self.pitch_id_map = { pitch.id: pitch for pitch in self.pitches }
@@ -209,8 +211,10 @@ class Allocator:
 
             self.allocations.append({
                 'start_time': start_time.strftime("%I:%M%p").lower(),
+                'end_time': (start_time + duration).strftime("%I:%M%p").lower(),
                 'team': team.format_label(),
-                'pitch': f"{pitch.format_label()}",
+                'pitch': pitch.format_label(),
+                'capacity': pitch.capacity,
                 'preferred': preferred
             })
             logger.info(f"Allocated {team.format_label()} to pitch '{pitch.format_label()}' at {start_time.strftime('%H:%M')}.")

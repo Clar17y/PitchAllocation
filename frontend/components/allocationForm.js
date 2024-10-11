@@ -98,7 +98,7 @@ function populatePitches(pitches) {
         const label = document.createElement('label');
         label.className = 'form-check-label';
         label.htmlFor = `pitch-${pitch.id}`;
-        label.innerText = pitch.format_label();
+        label.innerText = pitch.format_label;
 
         div.appendChild(checkbox);
         div.appendChild(label);
@@ -264,7 +264,7 @@ function displayResults(allocations) {
             }
             currentCapacity = alloc.capacity;
         }
-        resultText += `${alloc.time} - ${alloc.team} - ${alloc.pitch}\n`;
+        resultText += `${alloc.start_time} - ${alloc.team} - ${alloc.pitch}\n`;
     });
 
     resultsBox.value = resultText.trim();

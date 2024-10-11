@@ -199,11 +199,11 @@ def allocate():
 
         try:
             id = team_entry['id']
-            team = next((t for t in teams if t.id == int(id)), None)
+            team = next((t for t in teams if t['id'] == int(id)), None)
             if team:
-                if team.age_group not in config['home_teams']:
-                    config['home_teams'][team.age_group] = []
-                config['home_teams'][team.age_group].append({
+                if team['age_group'] not in config['home_teams']:
+                    config['home_teams'][team['age_group']] = []
+                config['home_teams'][team['age_group']].append({
                     'id': id,
                     'preferred_time': preferred_time
                 })
@@ -229,7 +229,8 @@ def allocate():
         pitch = next((p for p in pitches if p.format_label() == alloc['pitch']), None)
         if pitch:
             formatted_allocations.append({
-                'time': alloc['time'],
+                'start_time': alloc['start_time'],
+                'end_time': alloc['end_time'],
                 'team': alloc['team'],
                 'pitch': alloc['pitch'],
                 'capacity': pitch.capacity,
@@ -237,7 +238,7 @@ def allocate():
             })
 
     # Sort allocations by capacity and then by time
-    formatted_allocations.sort(key=lambda x: (x['capacity'], datetime.strptime(x['time'], "%I:%M%p")))
+    formatted_allocations.sort(key=lambda x: (x['capacity'], datetime.strptime(x['start_time'], "%I:%M%p")))
     logger.info(f"Formatted allocations: {formatted_allocations}")
     logs = [{'level': 'info', 'message': 'Allocation completed successfully.'}]
 

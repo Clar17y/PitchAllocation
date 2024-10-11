@@ -19,7 +19,7 @@ export function extractAgeGroup(teamName) {
 }
 
 export function groupTeamsByAgeGroup(teams) {
-    return teams.reduce((groups, team) => {
+    const groupedTeams = teams.reduce((groups, team) => {
         const ageGroup = team.display_name.split(' ')[0]; // Assuming the age group is the first part of the display name
         if (!groups[ageGroup]) {
             groups[ageGroup] = [];
@@ -27,6 +27,22 @@ export function groupTeamsByAgeGroup(teams) {
         groups[ageGroup].push(team);
         return groups;
     }, {});
+
+    // Define a custom sorting function for age groups
+    const sortAgeGroups = (a, b) => {
+        const getAge = (group) => parseInt(group.substring(1)); // Extract the number from 'U7', 'U8', etc.
+        return getAge(a) - getAge(b);
+    };
+
+    // Create a new object with sorted keys
+    const sortedGroups = Object.keys(groupedTeams)
+        .sort(sortAgeGroups)
+        .reduce((sorted, key) => {
+            sorted[key] = groupedTeams[key];
+            return sorted;
+        }, {});
+
+    return sortedGroups
 }
 
 export function copyResults() {
