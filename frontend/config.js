@@ -3,7 +3,7 @@
 import { fetchTeams, fetchPitches } from './api/api.js';
 import { saveConfigData, deleteConfigData } from './api/configApi.js';
 import { logMessage } from './utils/logger.js';
-import { getCookie, eraseCookie } from './utils/cookie.js';
+import { eraseCookie } from './utils/cookie.js';
 
 let currentUser = '';
 let allPitches = [];         // Stores all available pitches
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     try {
         const response = await fetch('/api/current_user', {
             method: 'GET',
-            credentials: 'include'  // Include cookies in the request
+            credentials: 'same-origin'  // Include cookies in the request
         });
 
         if (response.status === 200) {
@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', async function() {
  */
 async function loadPitches() {
     try {
-        const data = await fetchPitches(currentUser);
+        const data = await fetchPitches();
         allPitches = data.pitches; // Store all pitches
 
         allPitches.sort((a,b) => a.capacity - b.capacity);
@@ -80,7 +80,7 @@ async function loadPitches() {
  */
 async function loadTeams() {
     try {
-        const data = await fetchTeams(currentUser);
+        const data = await fetchTeams();
         allTeams = data.teams;
 
         // Sort teams by age_group
@@ -330,7 +330,7 @@ function displayTeamDetails(team) {
     document.getElementById('team-id').value = team.id;
     document.getElementById('team-name').value = team.name;
     document.getElementById('team-age-group').value = team.age_group;
-    document.getElementById('team-gender').value = team.gender;
+    document.getElementById('team-gender').value = team.is_girls ? 'Girls' : 'Boys';
     // Store current editing team ID
     document.getElementById('team-details-form').dataset.editingId = team.id;
 }
@@ -420,7 +420,7 @@ async function handleTeamFormSubmit(event) {
     const newTeamData = {
         name: document.getElementById('team-name').value.trim().toUpperCase(),
         age_group: document.getElementById('team-age-group').value.trim(),
-        gender: document.getElementById('team-gender').value
+        is_girls: document.getElementById('team-gender').value === 'Girls'
     };
 
     // Frontend Validation
@@ -637,7 +637,7 @@ function formatPitchLabel(pitch) {
  * @returns {string}
  */
 function formatTeamLabel(team) {
-    return `${team.age_group} ${team.name}` + (team.gender === 'Girls' ? ` (Girls)` : ``)
+    return `${team.age_group} ${team.name}` + (team.is_girls  ? ` (Girls)` : ``)
 }
 
 /**
@@ -670,13 +670,11 @@ function validateTeamData(data, editingId) {
     // Limit lengths
     if (data.name.length > 50) return 'Team name must be 50 characters or fewer.';
     if (data.age_group.length > 20) return 'Age group must be 20 characters or fewer.';
-    if (data.gender.length > 10) return 'Gender must be 10 characters or fewer.';
 
     // Alphanumeric checks (allowing spaces, hyphens, underscores and brackets)
     const alphaNumRegex = /^[a-zA-Z0-9\s()_-]+$/;
     if (!alphaNumRegex.test(data.name)) return 'Team name contains invalid characters.';
     if (!alphaNumRegex.test(data.age_group)) return 'Age group contains invalid characters.';
-    if (!alphaNumRegex.test(data.gender)) return 'Gender contains invalid characters.';
 
     return null; // No errors
 }

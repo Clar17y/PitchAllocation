@@ -27,20 +27,26 @@ async function fetchData(endpoint, queryParams = {}) {
 
 /**
  * Fetch teams data specific to the current user.
- * @param {string} username - The current user's username.
  * @returns {Promise<Array>} - List of teams.
  */
-export async function fetchTeams(username) {
-    return fetchData(API_ENDPOINTS.TEAMS, { username });
+export async function fetchTeams() {
+    return fetchData(API_ENDPOINTS.TEAMS);
 }
 
 /**
  * Fetch pitches data specific to the current user.
- * @param {string} username - The current user's username.
  * @returns {Promise<Array>} - List of pitches.
  */
-export async function fetchPitches(username) {
-    return fetchData(API_ENDPOINTS.PITCHES, { username });
+export async function fetchPitches() {
+    return fetchData(API_ENDPOINTS.PITCHES);
+}
+
+/**
+ * Fetch players data specific to the current user.
+ * @returns {Promise<Array>} - List of players.
+ */
+export async function fetchPlayers() {
+    return fetchData(API_ENDPOINTS.PLAYERS);
 }
 
 /**

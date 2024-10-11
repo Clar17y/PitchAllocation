@@ -1,4 +1,8 @@
 from datetime import datetime, timedelta
+from flask_login import current_user
+
+def get_current_user_id():
+    return current_user.id if current_user.is_authenticated else None
 
 def get_datetime(time_str_override, default_time_str, reference_date):
     """Convert a time string to a datetime.datetime object with the given reference_date."""

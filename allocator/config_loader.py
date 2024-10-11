@@ -59,9 +59,7 @@ def load_teams():
                 'id': team.id,
                 'name': team.name,
                 'age_group': team.age_group,
-                'gender': team.gender,
-                'girls': team.girls,
-                'overlaps_with': team.overlaps_with,
+                'is_girls': team.is_girls,
                 'display_label': team.format_label()
             })
         

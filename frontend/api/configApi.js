@@ -21,7 +21,8 @@ export async function fetchConfigData(configType, method, queryParams = {}, payl
         method: method.toUpperCase(),
         headers: {
             'Content-Type': 'application/json'
-        }
+        },
+        credentials: 'same-origin'
     };
 
     if (['post', 'put', 'delete'].includes(method.toLowerCase())) {

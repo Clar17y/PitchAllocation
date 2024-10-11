@@ -9,10 +9,10 @@ from models.team import Team
 from models.player import Player
 from models.user import User
 from models.allocation import Allocation
+from schemas import create_player_schema, create_players_schema, create_pitch_schema, create_pitches_schema, create_team_schema, create_teams_schema, create_allocation_schema, create_allocations_schema
+from sqlalchemy.exc import SQLAlchemyError
+from marshmallow import ValidationError
 from datetime import datetime
-import boto3
-from botocore.exceptions import NoCredentialsError, PartialCredentialsError
-import re
 
 application = Flask(__name__)
 application.config.from_object('config.Config')
@@ -28,10 +28,6 @@ logger = setup_logger(__name__)
 # Create database tables
 with application.app_context():
     db.create_all()
-
-# Let's use S3 for storage
-s3 = boto3.client('s3')
-BUCKET_NAME = 'owpitchalloc'
 
 # Routes for Authentication
 @application.route('/register', methods=['GET', 'POST'])
@@ -105,11 +101,11 @@ def get_teams():
     teams_data = []
     for team in teams:
         teams_data.append({
-            'id': team.id,
-            'name': team.name,
-            'age_group': team.age_group,
-            'gender': team.gender,
-            'display_name': team.format_label()
+            'id': team['id'],
+            'name': team['name'],
+            'age_group': team['age_group'],
+            'is_girls': team['is_girls'],
+            'display_name': team['display_label']
         })
     return jsonify({'teams': teams_data})
 
@@ -135,17 +131,30 @@ def get_pitches():
         })
     return jsonify({'pitches': pitches_data})
 
+@application.route('/api/players', methods=['GET'])
+@login_required
+def get_players():
+    try:
+        players = load_players()
+    except Exception as e:
+        logger.error(f"Failed to load players for user '{current_user.name}': {e}")
+    
+    players_data = []
+    for player in players:
+        players_data.append({
+            'id': player['id'],
+            'first_name': player['first_name'],
+            'surname': player['surname'],
+            'team_id': player['team_id'],
+            'shirt_number': player['shirt_number']
+        })
+    return jsonify({'players': players_data})
+
 @application.route('/api/allocate', methods=['POST'])
 @login_required
 def allocate():
-    # Retrieve username from cookies
-    username = request.cookies.get('username')
-    if not username:
-        logger.error("Username not found in cookies.")
-        return jsonify({'allocations': [], 'logs': [{'level': 'error', 'message': 'User not authenticated.'}]}), 401
-
-    pitches = load_pitches(username=username)
-    teams = load_teams(username=username)
+    pitches = load_pitches()
+    teams = load_teams()
     if not pitches or not teams:
         return jsonify({'allocations': [], 'logs': [{'level': 'error', 'message': 'Initialization failed. Pitches or teams data missing.'}]}), 500
 
@@ -156,7 +165,7 @@ def allocate():
     selected_pitches = data.get('pitches', [])
     selected_teams = data.get('teams', [])
 
-    logger.info(f"Received allocation request for {username}.")
+    logger.info(f"Received allocation request for {current_user.name}.")
     logger.debug(f"Allocation data: {data}")
 
     # Filter pitches based on selection
@@ -236,51 +245,7 @@ def allocate():
         unallocated = "\n".join([team.format_label() for team in allocator.unallocated_teams])
         logs.append({'level': 'warning', 'message': f'Unallocated Teams:\n{unallocated}'})
 
-    # Save Allocation Results to Output folder
-    save_allocation_results(username, date, formatted_allocations)
-
     return jsonify({'allocations': formatted_allocations, 'logs': logs})
-
-
-def save_allocation_results(username, date_str, allocations):
-    """
-    Saves the allocation results to a file in the Output directory.
-    Each user's allocations are stored in separate files identified by their username and date.
-    """
-    try:
-        # Sanitize the username to prevent directory traversal or injection
-        if not re.match(r'^[a-zA-Z0-9]+$', username):
-            logger.error(f"Invalid username format: '{username}'. Allocations not saved.")
-            return
-
-        # Parse the date string to ensure it's valid
-        allocation_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        s3_filename = f"allocations/{username}/{allocation_date}.txt"
-
-        # Format the allocations as Allocation Results
-        if not allocations:
-            result_text = "No allocations available."
-        else:
-            result_text = ""
-            current_capacity = None
-
-            for alloc in allocations:
-                if alloc['capacity'] != current_capacity:
-                    if current_capacity is not None:
-                        result_text += '\n'  # Add an empty line between capacity groups
-                    current_capacity = alloc['capacity']
-                preferred_str = 'True' if alloc['preferred'] else 'False'
-                result_text += f"{alloc['time']} - {alloc['team']} - {alloc['pitch']} - {preferred_str}\n"
-
-            result_text = result_text.strip()
-
-        try:
-            s3.put_object(Bucket=BUCKET_NAME, Key=s3_filename, Body=result_text)
-            logger.info(f"Allocation results saved to S3 bucket '{BUCKET_NAME}' with key '{s3_filename}'.")
-        except (NoCredentialsError, PartialCredentialsError) as e:
-            logger.error(f"Failed to save allocation results to S3: {e}")
-    except Exception as e:
-        logger.error(f"Failed to save allocation results for user '{username}': {e}")
 
 @application.route('/', methods=['GET'])
 @login_required
@@ -296,270 +261,225 @@ def serve_static(filename):
 @login_required
 def get_statistics():
     """
-    Fetches all allocation results for the current user from the Output directory
+    Fetches all allocation results for the current user directly from the Allocation table
     and returns them as a list of allocation records.
     """
-    allocations = []
     try:
-        # Retrieve username from cookies
         username = current_user.name
         if not username:
             return jsonify({'error': 'User not authenticated.'}), 401
 
-        response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"allocations/{username}/")
-        user_files = response.get('Contents', [])
+        # Fetch allocations directly from the Allocation table
+        allocations = Allocation.query.join(User).filter(User.name == username).all()
 
-        logger.debug(f"Found {len(user_files)} files for user '{username}'.")
-
-        if not user_files:
+        if not allocations:
             logger.info(f"No allocations found for user '{username}'.")
-            return jsonify({'allocations': []})
+            return jsonify({'allocations': []}), 200
 
-        for file_path in user_files:
-            date_str = file_path['Key'].split('/')[-1].split('.')[0]  # Extract date from filename
-            try:
-                response = s3.get_object(Bucket=BUCKET_NAME, Key=file_path['Key'])
-                content = response['Body'].read().decode('utf-8')
-                if content == "No allocations available.":
-                    continue
-                for line in content.split('\n'):
-                    parts = line.split(' - ')
-                    if len(parts) != 5:
-                        logger.warning(f"Skipping malformed line in file '{file_path['Key']}': {line}")
-                        continue
-                    time, team, capacity,pitch, preferred_str = parts
-                    allocations.append({
-                        'date': date_str,
-                        'time': time.strip(),
-                        'team': team.strip(),
-                        'pitch': pitch.strip(),
-                        'preferred': preferred_str.lower() == 'true'
-                    })
-            except Exception as e:
-                logger.info(f"Error getting file from s3: {e}")
+        # Serialize allocations using Marshmallow
+        allocations_schema = create_allocations_schema()
+        result = allocations_schema.dump(allocations)
+        logger.info(f"Fetched {len(result)} allocation records for user '{username}'.")
+        return jsonify({'allocations': result}), 200
 
-        logger.info(f"Fetched statistics data successfully for user '{username}'. Total allocations: {len(allocations)}.")
     except Exception as e:
         logger.error(f"Failed to fetch statistics data: {e}")
         return jsonify({'error': 'Failed to fetch statistics data.'}), 500
 
-    return jsonify({'allocations': allocations})
-
-@application.route('/api/config/<config_type>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@application.route('/api/config/pitches', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @login_required
-def config_handler(config_type):
+def config_pitches():
+    config_type = 'pitches'
+    return handle_config(config_type)
+
+@application.route('/api/config/teams', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@login_required
+def config_teams():
+    config_type = 'teams'
+    return handle_config(config_type)
+
+@application.route('/api/config/players', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@login_required
+def config_players():
+    config_type = 'players'
+    return handle_config(config_type)
+
+def handle_config(config_type):
+    """
+    Generic handler for configurations. Refactored into separate functions for clarity.
+    """
     nonPluralConfigType = config_type[:-2] if config_type == "pitches" else config_type[:-1]
     # Sanitize config_type to prevent directory traversal or injection
     if config_type not in ['pitches', 'teams', 'players']:
         logger.error(f"Invalid config type: '{config_type}'")
         return jsonify({'error': 'Invalid config type.'}), 400
 
-    username = current_user.name
-
-    user_key = get_config_key(config_type, username)
-    default_key = get_default_config_key(config_type)
-    logger.info(f"User config key: {user_key}")
-    logger.info(f"Default config key: {default_key}")
-
+    player_schema = create_player_schema()
+    players_schema = create_players_schema()
+    pitch_schema = create_pitch_schema()
+    pitches_schema = create_pitches_schema()
+    team_schema = create_team_schema()
+    teams_schema = create_teams_schema()
     if request.method == 'GET':
-        try:
-            if config_type == 'players':
-                config_data = load_players(username=username)
-            elif config_type == 'pitches':
-                config_data = load_pitches(username=username)
-            elif config_type == 'teams':
-                config_data = load_teams(username=username)
-            
-            serialized_data = []
-            for item in config_data:
-                if config_type == 'pitches':
-                    serialized_data.append(item.to_dict())
-                elif config_type == 'teams':
-                    serialized_data.append(item.__dict__)
-                elif config_type == 'players':
-                    serialized_data.append(item.to_dict())
-            return jsonify({config_type: serialized_data}), 200
-        except FileNotFoundError:
-            return jsonify({'error': f'Default {config_type} config not found.'}), 404
-        except Exception as e:
-            logger.error(f"Error loading {config_type}: {e}")
-            return jsonify({'error': 'Failed to load configuration.'}), 500
+        if config_type == 'players':
+            config_data = load_players()
+            result = players_schema.dump(config_data)
+        elif config_type == 'pitches':
+            config_data = load_pitches()
+            result = pitches_schema.dump(config_data)
+        elif config_type == 'teams':
+            config_data = load_teams()
+            result = teams_schema.dump(config_data)
+        return jsonify({config_type: result}), 200
 
     elif request.method in ['POST', 'PUT', 'DELETE']:
-        try:
-            payload = request.get_json()
-            logger.info(f"Received payload: {payload}")
-            if not payload and request.method != 'DELETE':
-                logger.error("No data provided.")
-                return jsonify({'error': 'No data provided.'}), 400
+        payload = request.get_json()
+        logger.info(f"Received payload: {payload}")
+        if not payload and request.method != 'DELETE':
+            logger.error("No data provided.")
+            return jsonify({'error': 'No data provided.'}), 400
 
-            # Load existing data
+        # Load existing data
+        try:
+            if config_type == 'players':
+                config_data = load_players()
+            elif config_type == 'pitches':
+                config_data = load_pitches()
+            elif config_type == 'teams':
+                config_data = load_teams()
+        except Exception as e:
+            logger.error(f"Failed to load {config_type}: {e}")
+            config_data = []
+
+        # Serialize existing data
+        if config_type == 'players':
+            config_list = players_schema.dump(config_data)
+        elif config_type == 'pitches':
+            config_list = pitches_schema.dump(config_data)
+        elif config_type == 'teams':
+            config_list = teams_schema.dump(config_data)
+
+        # Define maximum items and unique fields based on config_type
+        if config_type == 'pitches':
+            max_items = 40
+        elif config_type == 'teams':
+            max_items = 100
+        elif config_type == 'players':
+            max_items = 1000 
+
+        if request.method == 'POST':
+            if len(config_list) >= max_items:
+                logger.warning(f"Maximum number of {config_type} reached.")
+                return jsonify({'error': f'Maximum number of {config_type} ({max_items}) reached.'}), 400
+
+            # Deserialize new item
+            if config_type == 'players':
+                try:
+                    new_item = player_schema.load(payload)
+                except ValidationError as err:
+                    return jsonify(err.messages), 400
+            elif config_type == 'pitches':
+                try:
+                    new_item = pitch_schema.load(payload)
+                except ValidationError as err:
+                    return jsonify(err.messages), 400
+            elif config_type == 'teams':
+                try:
+                    new_item = team_schema.load(payload)
+                except ValidationError as err:
+                    return jsonify(err.messages), 400
+
+            # Additional unique constraints and validations can be added here
+
+            # Save to DB
+            try:
+                db.session.add(new_item)
+                db.session.commit()
+                logger.info(f"Created new {nonPluralConfigType} with ID {new_item.id}.")
+                result = pitch_schema.dump(new_item) if config_type == 'pitches' else (
+                            team_schema.dump(new_item) if config_type == 'teams' else
+                            player_schema.dump(new_item))
+                return jsonify({nonPluralConfigType: result}), 201
+            except SQLAlchemyError as e:
+                db.session.rollback()
+                logger.error(f"Database error while creating {config_type}: {e}")
+                return jsonify({'error': 'Database error occurred.'}), 500
+
+        elif request.method == 'PUT':
+            item_id = payload.get('id')
+            if not item_id:
+                logger.error("ID not provided for update.")
+                return jsonify({'error': 'ID is required for update.'}), 400
+
+            # Find the item
+            item = None
+            if config_type == 'players':
+                item = Player.query.filter_by(id=item_id, user_id=current_user.id).first()
+            elif config_type == 'pitches':
+                item = Pitch.query.filter_by(id=item_id, user_id=current_user.id).first()
+            elif config_type == 'teams':
+                item = Team.query.filter_by(id=item_id, user_id=current_user.id).first()
+
+            if not item:
+                logger.error(f"{nonPluralConfigType.capitalize()} not found.")
+                return jsonify({'error': f'{nonPluralConfigType.capitalize()} not found.'}), 404
+
+            # Update the item
+            try:
+                payload_without_id = {k: v for k, v in payload.items() if k != 'id'}
+                if config_type == 'players':
+                    updated_item = player_schema.load(payload_without_id, partial=True)
+                elif config_type == 'pitches':
+                    updated_item = pitch_schema.load(payload_without_id, partial=True)
+                elif config_type == 'teams':
+                    updated_item = team_schema.load(payload_without_id, partial=True)
+
+                # Update the existing item with new data
+                for attr, value in updated_item.__dict__.items():
+                    if attr != '_sa_instance_state':  # Skip SQLAlchemy internal attribute
+                        setattr(item, attr, value)
+
+                db.session.commit()
+                logger.info(f"Updated {nonPluralConfigType} with ID {item_id}.")
+                result = pitch_schema.dump(updated_item) if config_type == 'pitches' else (
+                            team_schema.dump(updated_item) if config_type == 'teams' else
+                            player_schema.dump(updated_item))
+                return jsonify({nonPluralConfigType: result}), 200
+            except ValidationError as err:
+                return jsonify(err.messages), 400
+            except SQLAlchemyError as e:
+                db.session.rollback()
+                logger.error(f"Database error while updating {config_type}: {e}")
+                return jsonify({'error': 'Database error occurred.'}), 500
+
+        elif request.method == 'DELETE':
+            item_id = request.args.get('id')
+            if not item_id:
+                logger.error("ID not provided for deletion.")
+                return jsonify({'error': 'ID is required for deletion.'}), 400
+
+            # Find and delete the item
             try:
                 if config_type == 'players':
-                    config_data = load_players(username=username)
+                    item = Player.query.filter_by(id=item_id, user_id=current_user.id).first()
                 elif config_type == 'pitches':
-                    config_data = load_pitches(username=username)
+                    item = Pitch.query.filter_by(id=item_id, user_id=current_user.id).first()
                 elif config_type == 'teams':
-                    config_data = load_teams(username=username)
-            except FileNotFoundError:
-                # Load default config if user config doesn't exist
-                try:
-                    if config_type == 'players':
-                        config_data = load_players()
-                    elif config_type == 'pitches':
-                        config_data = load_pitches()
-                    elif config_type == 'teams':
-                        config_data = load_teams()
-                except FileNotFoundError:
-                    config_data = []
+                    item = Team.query.filter_by(id=item_id, user_id=current_user.id).first()
 
-            # Convert to a mutable type (list of dicts or Player objects)
-            if config_type == 'players':
-                config_list = [item.to_dict() for item in config_data]
-            elif config_type == 'pitches':
-                config_list = [item.to_dict() for item in config_data]
-            elif config_type == 'teams':
-                config_list = [item.__dict__ for item in config_data]
-
-            # Define maximum items and unique fields based on config_type
-            if config_type == 'pitches':
-                max_items = 40
-                unique_fields = ['capacity', 'name']
-            elif config_type == 'teams':
-                max_items = 100
-                unique_fields = ['name', 'age_group', 'gender']
-            elif config_type == 'players':
-                max_items = 500  # Define a reasonable limit for players
-                unique_fields = ['first_name', 'surname', 'team_id', 'shirt_number']
-
-            if request.method == 'POST':
-                if len(config_list) >= max_items:
-                    logger.warning(f"Maximum number of {config_type} reached.")
-                    return jsonify({'error': f'Maximum number of {config_type} ({max_items}) reached.'}), 400
-
-                # Create new item
-                new_id = generate_unique_id(config_list)
-                new_item = {**payload, 'id': new_id}
-
-                # Additional unique constraint for players
-                if config_type == 'players':
-                    # Ensure that a player can only belong to one team
-                    existing_player = next((p for p in config_list if p['id'] == new_item['id']), None)
-                    if existing_player:
-                        return jsonify({'error': 'Player ID already exists.'}), 400
-
-                    # Ensure shirt_number is unique within the team
-                    for player in config_list:
-                        if (player['team_id'] == new_item['team_id'] and 
-                            player['shirt_number'] == new_item['shirt_number']):
-                            logger.warning(f"Shirt number {new_item['shirt_number']} already exists in team ID {new_item['team_id']}.")
-                            return jsonify({'error': 'Shirt number already exists in the team.'}), 400
-
-                    # Validate if team_id exists
-                    try:
-                        teams = load_teams(username=username)
-                        if not any(team.id == new_item['team_id'] for team in teams):
-                            logger.warning(f"Team ID {new_item['team_id']} does not exist.")
-                            return jsonify({'error': 'Invalid team_id provided.'}), 400
-                    except Exception as e:
-                        logger.error(f"Error loading teams for validation: {e}")
-                        return jsonify({'error': 'Failed to validate team ID.'}), 500
-
-                # Validate uniqueness based on unique_fields
-                if any(all(player[field] == new_item[field] for field in unique_fields) for player in config_list):
-                    logger.warning(f"Duplicate {nonPluralConfigType} detected.")
-                    return jsonify({'error': f'A {nonPluralConfigType} with the same {", ".join(unique_fields)} already exists.'}), 400
-
-                # Additional validations can be added here (e.g., input lengths, allowed characters)
-                # For players, ensure 'first_name' and 'surname' are valid
-
-                if config_type == 'players':
-                    # Example: Validate names using regex (already handled in frontend, but double-checking)
-                    name_regex = re.compile(r'^[A-Za-z\s\-]{1,50}$')
-                    if not name_regex.match(new_item['first_name']):
-                        return jsonify({'error': 'Invalid characters in first name.'}), 400
-                    if not name_regex.match(new_item['surname']):
-                        return jsonify({'error': 'Invalid characters in surname.'}), 400
-
-                config_list.append(new_item)
-                logger.info(f"Created new {nonPluralConfigType} with ID {new_id}.")
-
-            elif request.method == 'PUT':
-                item_id = payload.get('id')
-                if not item_id:
-                    logger.error("ID not provided for update.")
-                    return jsonify({'error': 'ID is required for update.'}), 400
-
-                # Find and update the item
-                for item in config_list:
-                    if item['id'] == item_id:
-                        updated_item = {**item, **payload}
-                        
-                        if config_type == 'players':
-                            # Ensure shirt_number uniqueness within the team
-                            for p in config_list:
-                                if (p['team_id'] == updated_item['team_id'] and 
-                                    p['shirt_number'] == updated_item['shirt_number'] and 
-                                    p['id'] != item_id):
-                                    logger.warning(f"Shirt number {updated_item['shirt_number']} already exists in team ID {updated_item['team_id']}.")
-                                    return jsonify({'error': 'Shirt number already exists in the team.'}), 400
-                            
-                            # Validate if the new team_id exists
-                            teams = load_teams(username=username)
-                            if not any(team.id == updated_item['team_id'] for team in teams):
-                                logger.warning(f"Team ID {updated_item['team_id']} does not exist.")
-                                return jsonify({'error': 'Invalid team_id provided.'}), 400
-
-                            # Validate names
-                            name_regex = re.compile(r'^[A-Za-z\s\-]{1,50}$')
-                            if not name_regex.match(updated_item['first_name']):
-                                return jsonify({'error': 'Invalid characters in first name.'}), 400
-                            if not name_regex.match(updated_item['surname']):
-                                return jsonify({'error': 'Invalid characters in surname.'}), 400
-
-                        # Update the item
-                        item.update(updated_item)
-                        logger.info(f"Updated {nonPluralConfigType} with ID {item_id}.")
-                        break
-                else:
-                    logger.error(f"{nonPluralConfigType.capitalize()} not found.")
-                    return jsonify({'error': f'{nonPluralConfigType.capitalize()} not found.'}), 404
-
-            elif request.method == 'DELETE':
-                item_id = request.args.get('id')
-                if not item_id:
-                    logger.error("ID not provided for deletion.")
-                    return jsonify({'error': 'ID is required for deletion.'}), 400
-
-                original_length = len(config_list)
-                config_list = [item for item in config_list if item['id'] != int(item_id)]
-                if len(config_list) < original_length:
-                    logger.info(f"Deleted {nonPluralConfigType} with ID {item_id}.")
-                else:
+                logger.info(f"Item to delete: {item}")
+                if not item:
                     logger.error(f"{nonPluralConfigType.capitalize()} not found for deletion.")
                     return jsonify({'error': f'{nonPluralConfigType.capitalize()} not found.'}), 404
 
-            # Save updated config back to S3
-            # Use to_dict to ensure proper serialization
-            if config_type == 'players':
-                serializable_config = [Player(**item).to_dict() for item in config_list]
-            elif config_type == 'pitches':
-                serializable_config = [Pitch(**item).to_dict() for item in config_list]
-            elif config_type == 'teams':
-                serializable_config = [Team(**item).to_dict() for item in config_list]
-
-            save_json_to_s3(user_key, {config_type: serializable_config})
-            response_msg = f'{config_type.capitalize()} saved successfully.'
-            response_data = {'message': response_msg}
-
-            if request.method == 'POST':
-                response_data[nonPluralConfigType] = new_item
-
-            return jsonify(response_data), 200
-
-        except Exception as e:
-            logger.error(f"Error handling {config_type} config: {str(e)}")
-            return jsonify({'error': 'Internal server error.'}), 500
+                db.session.delete(item)
+                db.session.commit()
+                logger.info(f"Deleted {nonPluralConfigType} with ID {item_id}.")
+                return jsonify({'message': f'{nonPluralConfigType.capitalize()} deleted successfully.'}), 200
+            except SQLAlchemyError as e:
+                db.session.rollback()
+                logger.error(f"Database error while deleting {config_type}: {e}")
+                return jsonify({'error': 'Database error occurred.'}), 500
 
 @application.route('/register.html')
 def register_page():

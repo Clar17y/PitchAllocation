@@ -7,10 +7,8 @@ import { extractAgeGroup } from '../utils/helpers.js';
 let allTeamNames = [];
 let currentTeamFilter = 'All';
 let lastFetchedAllocations = [];
-let currentUsername = '';
 
-export async function initializeStatistics(username) {
-    currentUsername = username;
+export async function initializeStatistics() {
     try {
         const allocations = await fetchStatisticsData(); // No parameter needed
         processStatistics(allocations);

@@ -14,15 +14,5 @@ class Player(db.Model):
     team = db.relationship('Team', back_populates='players')
     owner = db.relationship('User', back_populates='players')
 
-    def to_dict(self):
-        """Serialize Player object to a dictionary."""
-        return {
-            'id': self.id,
-            'first_name': self.first_name,
-            'surname': self.surname,
-            'team_id': self.team_id,
-            'shirt_number': self.shirt_number
-        }
-
     def __str__(self):
         return f"Player(id={self.id}, name={self.first_name} {self.surname}, team_id={self.team_id}, shirt_number={self.shirt_number})"

@@ -5,7 +5,8 @@ class Allocation(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.Date, nullable=False)
-    time = db.Column(db.DateTime(timezone=True), nullable=False)  # Changed to DateTime for precise scheduling
+    start_time = db.Column(db.DateTime(timezone=True), nullable=False) 
+    end_time = db.Column(db.DateTime(timezone=True), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user_login_info.id'), nullable=False)
     pitch_id = db.Column(db.Integer, db.ForeignKey('Pitch.id'), nullable=False)
     team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=False)
@@ -21,7 +22,8 @@ class Allocation(db.Model):
         return {
             'id': self.id,
             'date': self.date.isoformat(),
-            'time': self.time.isoformat(),
+            'start_time': self.start_time.isoformat(),
+            'end_time': self.end_time.isoformat(),
             'user_id': self.user_id,
             'pitch_id': self.pitch_id,
             'team_id': self.team_id

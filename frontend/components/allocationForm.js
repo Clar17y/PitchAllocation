@@ -3,32 +3,26 @@
 import { fetchTeams, fetchPitches, submitAllocation } from '../api/api.js';
 import { groupTeamsByAgeGroup, generateTimeOptions } from '../utils/helpers.js';
 import { logMessage } from '../utils/logger.js';
-import { getCookie } from '../utils/cookie.js';
 
-let currentUsername = '';
-
-/**
- * Initialize Allocation Form
- */
-document.addEventListener('DOMContentLoaded', function() {
-    const username = getCookie('username');
-});
-
-export async function initializeFormComponents(username) {
-    currentUsername = username;
+export async function initializeFormComponents() {
     populateNextSunday();
     populateStartTime();
     populateEndTime();
     try {
         const [pitchesData, teamsData] = await Promise.all([
-            fetchPitches(username),
-            fetchTeams(username)
+            fetchPitches(),
+            fetchTeams()
         ]);
 
         populatePitches(pitchesData.pitches);
         populateTeams(teamsData.teams);
     } catch (error) {
-        logMessage(error.message, 'error');
+        if (error.response && error.response.status === 401) {
+            // User is not authenticated, redirect to login
+            window.location.href = '/login.html';
+        } else {
+            logMessage(error.message, 'error');
+        }
     }
 
     document.getElementById('allocation-form').addEventListener('submit', function(event) {
@@ -104,7 +98,7 @@ function populatePitches(pitches) {
         const label = document.createElement('label');
         label.className = 'form-check-label';
         label.htmlFor = `pitch-${pitch.id}`;
-        label.innerText = `${pitch.format_label}`;
+        label.innerText = pitch.format_label();
 
         div.appendChild(checkbox);
         div.appendChild(label);
@@ -226,7 +220,6 @@ function handleSubmitAllocation() {
     });
 
     const payload = {
-        'username': currentUsername, // Include username
         'date': date,
         'start_time': `${start_hour}:${start_minute}`,
         'end_time': `${end_hour}:${end_minute}`,

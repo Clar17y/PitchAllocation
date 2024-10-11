@@ -1,15 +1,8 @@
 // frontend/players_config.js
 
-import { fetchConfigData, saveConfigData, deleteConfigData } from './api/configApi.js';
+import { saveConfigData, deleteConfigData } from './api/configApi.js';
 import { logMessage } from './utils/logger.js';
-import { getCookie } from './utils/cookie.js';
-
-// Check if user is authenticated
-const username = getCookie('username');
-if (!username) {
-    alert('You must be logged in to access this page.');
-    window.location.href = '/login.html';
-}
+import { fetchTeams, fetchPlayers } from './api/api.js';
 
 // DOM Elements
 const playersList = document.getElementById('players-list');
@@ -19,19 +12,33 @@ const teamsDropdown = document.getElementById('player-team');
 const toastContainer = document.getElementById('toast-container');
 let allPlayers = [];
 let allTeams = [];
+let currentUser = '';
 
 /**
  * Initialize the Players Configuration Page
  */
-document.addEventListener('DOMContentLoaded', async () => {
-    const username = getCookie('username');
-    if (!username) {
-        alert('User not logged in. Redirecting to login.');
-        location.href = '/';
-        return;
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const response = await fetch('/api/current_user', {
+            method: 'GET',
+            credentials: 'same-origin'  // Include cookies in the request
+        });
+
+        if (response.status === 200) {
+            const data = await response.json();
+            document.getElementById('current-user-display').textContent = `Logged in as: ${data.name}`;
+            document.getElementById('logout-button').style.display = 'inline-block';
+            currentUser = data.name;
+        } else {
+            // Redirect to login if not authenticated
+            window.location.href = '/login.html';
+        }
+    } catch (error) {
+        console.error('Error fetching current user:', error);
+        window.location.href = '/login.html';
     }
 
-    document.getElementById('current-user-display').textContent = `Logged in as: ${username}`;
+    document.getElementById('current-user-display').textContent = `Logged in as: ${currentUser}`;
     document.getElementById('logout-button').style.display = 'inline-block';
 
     await loadTeams();
@@ -53,7 +60,7 @@ document.addEventListener('DOMContentLoaded', async () => {
  */
 async function loadTeams() {
     try {
-        const data = await fetchConfigData('teams', 'get', { username: getCookie('username') });
+        const data = await fetchTeams();
         allTeams = data.teams;
         populateTeamsDropdown();
     } catch (error) {
@@ -79,7 +86,7 @@ function populateTeamsDropdown() {
  */
 async function loadPlayers() {
     try {
-        const data = await fetchConfigData('players', 'get', { username: getCookie('username') });
+        const data = await fetchPlayers();
         allPlayers = data.players;
         displayPlayers();
     } catch (error) {
@@ -144,7 +151,6 @@ function populatePlayerForm(player) {
  */
 async function handlePlayerFormSubmit(event) {
     event.preventDefault();
-    const username = getCookie('username');
 
     const playerId = playerForm.dataset.editingId ? parseInt(playerForm.dataset.editingId) : null;
     const firstName = document.getElementById('player-first-name').value.trim();
@@ -203,13 +209,12 @@ function handleCreatePlayer() {
  * @param {object} player 
  */
 async function handleDeletePlayer(player) {
-    const username = getCookie('username');
     if (!confirm(`Are you sure you want to delete ${player.first_name} ${player.surname}?`)) {
         return;
     }
 
     try {
-        await deleteConfigData('players', 'delete', { username: username, id: player.id });
+        await deleteConfigData('players', 'delete', { id: player.id });
         showAlert('Player deleted successfully.', 'success');
         await loadPlayers();
 
@@ -268,27 +273,5 @@ function showAlert(message, type) {
  * Handle Logout
  */
 function handleLogout() {
-    eraseCookie('username');
     location.reload();
-}
-
-
-/**
- * Get Cookie by Name
- * @param {string} name 
- * @returns {string|null}
- */
-function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
-}
-
-/**
- * Erase Cookie by Name
- * @param {string} name 
- */
-function eraseCookie(name) {   
-    document.cookie = `${name}=; Max-Age=-99999999;`;  
 }

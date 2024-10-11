@@ -110,21 +110,5 @@ class Pitch(db.Model):
             db.session.rollback()
             logger.error(f"Failed to reset matches for pitch '{self.format_label()}': {e}")
 
-    def to_dict(self):
-        """
-        Serialize Pitch object to a dictionary excluding 'matches'.
-
-        Returns:
-            dict: Pitch data.
-        """
-        return {
-            'id': self.id,
-            'name': self.name,
-            'capacity': self.capacity,
-            'location': self.location,
-            'cost': self.cost,
-            'overlaps_with': self.overlaps_with
-        }
-
     def __str__(self):
         return f"Pitch(id={self.id}, name={self.name}, capacity={self.capacity}, location={self.location}, cost={self.cost})"
