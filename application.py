@@ -1,6 +1,6 @@
-from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for, flash
+from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for, flash, session
 from flask_login import login_user, current_user, logout_user, login_required
-from models import db, bcrypt, login_manager
+from models import db, bcrypt, login_manager, init_db
 from allocator.allocator_base import Allocator
 from allocator.config_loader import load_pitches, load_teams, load_players, save_players
 from allocator.logger import setup_logger
@@ -9,25 +9,31 @@ from models.team import Team
 from models.player import Player
 from models.user import User
 from models.allocation import Allocation
-from schemas import create_player_schema, create_players_schema, create_pitch_schema, create_pitches_schema, create_team_schema, create_teams_schema, create_allocation_schema, create_allocations_schema
+from schemas import create_player_schema, create_players_schema, create_pitch_schema, create_pitches_schema, create_team_schema, create_teams_schema, StatisticsSchema
 from sqlalchemy.exc import SQLAlchemyError
 from marshmallow import ValidationError
-from datetime import datetime
-
+from datetime import datetime, timedelta
+from db_utils import retry_on_db_error
+from allocator.utils import format_age_group
 application = Flask(__name__)
 application.config.from_object('config.Config')
+application.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
+application.config['SESSION_REFRESH_EACH_REQUEST'] = True
 logger = setup_logger(__name__)
 
 # Initialize extensions
-db.init_app(application)
+init_db(application)
 bcrypt.init_app(application)
 login_manager.init_app(application)
-
-logger = setup_logger(__name__)
 
 # Create database tables
 with application.app_context():
     db.create_all()
+
+@application.before_request
+def before_request():
+    session.permanent = True
+    application.permanent_session_lifetime = timedelta(hours=1)
 
 # Routes for Authentication
 @application.route('/register', methods=['GET', 'POST'])
@@ -49,12 +55,77 @@ def register():
         
         new_user = User(name=name)
         new_user.set_password(password)
-        db.session.add(new_user)
-        db.session.commit()
-        flash('Account created successfully! Please log in.', 'success')
-        return redirect(url_for('login'))
-    
+        try:
+            db.session.add(new_user)
+            db.session.commit()
+            flash('Account created successfully! Please log in.', 'success')
+
+            # Duplicate pitches and teams from default_user
+            duplicate_default_user_configurations(new_user.id)
+            return redirect(url_for('login'))
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.error(f"Error registering user: {e}")
+            flash('An error occurred during registration. Please try again.', 'danger')
+            return redirect(url_for('register'))
     return render_template('register.html')
+
+def duplicate_default_user_configurations(new_user_id):
+    """
+    Duplicates all pitches and teams from the default_user to the new user.
+    
+    Args:
+        new_user_id (int): The ID of the newly created user.
+        
+    Raises:
+        Exception: If default_user does not exist or duplication fails.
+    """
+    default_username = "default_user"
+    default_user = User.query.filter_by(name=default_username).first()
+    
+    if not default_user:
+        logger.error(f"Default user '{default_username}' does not exist.")
+        raise Exception(f"Default user '{default_username}' does not exist.")
+    
+    try:
+        # Duplicate Pitches
+        default_pitches = Pitch.query.filter_by(user_id=default_user.id).all()
+        duplicated_pitches = []
+        for pitch in default_pitches:
+            # Create a new Pitch instance with the same attributes except user_id and id
+            new_pitch = Pitch(
+                name=pitch.name,
+                capacity=pitch.capacity,
+                location=pitch.location,
+                cost=pitch.cost,
+                overlaps_with=pitch.overlaps_with, 
+                user_id=new_user_id
+            )
+            duplicated_pitches.append(new_pitch)
+        
+        # Duplicate Teams
+        default_teams = Team.query.filter_by(user_id=default_user.id).all()
+        duplicated_teams = []
+        for team in default_teams:
+            # Create a new Team instance with the same attributes except user_id and id
+            new_team = Team(
+                name=team.name,
+                age_group=team.age_group,
+                is_girls=team.is_girls,
+                display_label=team.display_label,
+                user_id=new_user_id
+            )
+            duplicated_teams.append(new_team)
+        
+        # Add duplicated pitches and teams to the session
+        db.session.add_all(duplicated_pitches + duplicated_teams)
+        db.session.commit()
+        logger.info(f"Duplicated {len(duplicated_pitches)} pitches and {len(duplicated_teams)} teams from '{default_username}' to user ID {new_user_id}.")
+    
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error(f"Error duplicating configurations for user ID {new_user_id}: {e}")
+        raise e
 
 @application.route('/login', methods=['GET', 'POST'])
 def login():
@@ -83,14 +154,20 @@ def get_current_user():
         'name': current_user.name
     }), 200
 
-@application.route('/logout')
+@application.route('/logout', methods=['POST'])
+@login_required
 def logout():
-    logout_user()
-    flash('You have been logged out.', 'info')
-    return redirect(url_for('login'))
+    """Handle user logout."""
+    try:
+        logout_user()
+        return jsonify({'message': 'Logged out successfully.'}), 200
+    except Exception as e:
+        logger.error(f"Error during logout: {e}")
+        return jsonify({'error': 'An error occurred during logout.'}), 500
 
 @application.route('/api/teams', methods=['GET'])
 @login_required
+@retry_on_db_error()
 def get_teams():
     try:
         teams = load_teams()
@@ -111,6 +188,7 @@ def get_teams():
 
 @application.route('/api/pitches', methods=['GET'])
 @login_required
+@retry_on_db_error()
 def get_pitches():
     try:
         pitches = load_pitches()
@@ -133,6 +211,7 @@ def get_pitches():
 
 @application.route('/api/players', methods=['GET'])
 @login_required
+@retry_on_db_error()
 def get_players():
     try:
         players = load_players()
@@ -152,6 +231,7 @@ def get_players():
 
 @application.route('/api/allocate', methods=['POST'])
 @login_required
+@retry_on_db_error()
 def allocate():
     pitches = load_pitches()
     teams = load_teams()
@@ -260,27 +340,41 @@ def serve_static(filename):
 
 @application.route('/api/statistics', methods=['GET'])
 @login_required
+@retry_on_db_error()
 def get_statistics():
     """
     Fetches all allocation results for the current user directly from the Allocation table
     and returns them as a list of allocation records.
     """
     try:
-        username = current_user.name
-        if not username:
-            return jsonify({'error': 'User not authenticated.'}), 401
-
-        # Fetch allocations directly from the Allocation table
-        allocations = Allocation.query.join(User).filter(User.name == username).all()
+        # Perform the query with necessary joins
+        allocations = db.session.query(
+            Allocation.id,
+            Allocation.date,
+            Allocation.start_time,
+            Allocation.end_time,
+            Allocation.preferred,
+            User.name.label('user_name'),
+            Pitch.name.label('pitch_name'),
+            Team.name.label('team_name'),
+            Team.age_group,
+            Team.is_girls
+        ).join(Pitch, Allocation.pitch_id == Pitch.id
+        ).join(Team, Allocation.team_id == Team.id
+        ).join(User, Allocation.user_id == User.id
+        ).filter(User.id == current_user.id
+        ).all()
 
         if not allocations:
-            logger.info(f"No allocations found for user '{username}'.")
+            logger.info(f"No allocations found for user '{current_user.name}'.")
             return jsonify({'allocations': []}), 200
 
         # Serialize allocations using Marshmallow
-        allocations_schema = create_allocations_schema()
-        result = allocations_schema.dump(allocations)
-        logger.info(f"Fetched {len(result)} allocation records for user '{username}'.")
+        schema = StatisticsSchema(many=True)
+        result = schema.dump(allocations)
+        for alloc in result:
+            alloc['team_name'] = f"{format_age_group(alloc['age_group'])} {alloc['team_name']} {'(Girls)' if alloc['is_girls'] else ''}"
+        logger.info(f"Fetched {len(result)} allocation records for user '{current_user.name}'.")
         return jsonify({'allocations': result}), 200
 
     except Exception as e:
@@ -305,6 +399,7 @@ def config_players():
     config_type = 'players'
     return handle_config(config_type)
 
+@retry_on_db_error()
 def handle_config(config_type):
     """
     Generic handler for configurations. Refactored into separate functions for clarity.

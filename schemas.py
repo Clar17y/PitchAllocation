@@ -80,6 +80,7 @@ class AllocationSchema(Schema):
     pitch_id = fields.Int(required=True)
     team_id = fields.Int(required=True)
     created = fields.DateTime(dump_only=True)
+    preferred = fields.Bool(required=True)
 
     class Meta:
         unknown = EXCLUDE
@@ -103,6 +104,17 @@ class UserSchema(Schema):
     def make_user(self, data, **kwargs):
         return User(**data)
 
+class StatisticsSchema(Schema):
+    id = fields.Int()
+    date = fields.Date()
+    start_time = fields.DateTime()
+    end_time = fields.DateTime()
+    user_name = fields.Str(attribute="user_name")
+    pitch_name = fields.Str(attribute="pitch_name")
+    team_name = fields.Str(attribute="team_name")
+    age_group = fields.Str(attribute="age_group")
+    is_girls = fields.Bool(attribute="is_girls")
+    preferred = fields.Bool(attribute="preferred")
 
 def create_player_schema():
     return PlayerSchema(context={'user_id': get_current_user_id()})

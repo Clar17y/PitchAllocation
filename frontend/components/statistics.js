@@ -34,10 +34,15 @@ function populateTeamSelect() {
     });
 }
 
-export function processStatistics(allocations) {
-    lastFetchedAllocations = allocations; 
+// Add this helper function at the top of your file
+function formatTime(timeString) {
+    return timeString.substring(0, 5); // This will return just the HH:MM part
+}
 
-    allTeamNames = Array.from(new Set(allocations.map(alloc => alloc.team)))
+export function processStatistics(allocations) {
+    lastFetchedAllocations = allocations;
+
+    allTeamNames = Array.from(new Set(allocations.map(alloc => alloc.team_name)))
         .sort((a, b) => {
             const ageA = extractAgeGroup(a);
             const ageB = extractAgeGroup(b);
@@ -49,7 +54,8 @@ export function processStatistics(allocations) {
 
     const filteredAllocations = currentTeamFilter === 'All' 
         ? allocations 
-        : allocations.filter(alloc => alloc.team === currentTeamFilter);
+        : allocations.filter(alloc => alloc.team_name === currentTeamFilter);
+
     const timesTable = document.getElementById('times-table');
     const pitchesTable = document.getElementById('pitches-table');
     const startTimeFreqTable = document.getElementById('start-time-frequency-table');
@@ -66,34 +72,30 @@ export function processStatistics(allocations) {
     const startTimeFreqTableBody = startTimeFreqTable.querySelector('tbody');
     const pitchUsageFreqTableBody = pitchUsageFreqTable.querySelector('tbody');
 
-    // Use filteredAllocations instead of allocations
     const teamNames = currentTeamFilter === 'All' ? allTeamNames : [currentTeamFilter];
     const dates = Array.from(new Set(allocations.map(alloc => alloc.date))).sort();
-    const startTimes = Array.from(new Set(allocations.map(alloc => alloc.time))).sort();
-    const pitchNames = Array.from(new Set(allocations.map(alloc => alloc.pitch))).sort();
+    const startTimes = Array.from(new Set(allocations.map(alloc => formatTime(alloc.start_time)))).sort();
+    const pitchNames = Array.from(new Set(allocations.map(alloc => alloc.pitch_name))).sort();
 
     // Structure allocations by team and date
     const allocationsByTeamDate = {};
     filteredAllocations.forEach(alloc => {
-        if (!allocationsByTeamDate[alloc.team]) {
-            allocationsByTeamDate[alloc.team] = {};
+        if (!allocationsByTeamDate[alloc.team_name]) {
+            allocationsByTeamDate[alloc.team_name] = {};
         }
-        allocationsByTeamDate[alloc.team][alloc.date] = alloc;
+        allocationsByTeamDate[alloc.team_name][alloc.date] = alloc;
     });
 
     // Populate Match Start Times Table
-    // Create table headers with dates
-    const timesTableHead = document.querySelector('#times-table thead tr');
+    const timesTableHead = timesTable.querySelector('thead tr');
     dates.forEach(date => {
         const th = document.createElement('th');
         th.innerText = date;
         timesTableHead.appendChild(th);
     });
 
-    // Populate table rows
     teamNames.forEach(team => {
         const row = document.createElement('tr');
-
         const teamCell = document.createElement('td');
         teamCell.innerText = team;
         row.appendChild(teamCell);
@@ -102,12 +104,10 @@ export function processStatistics(allocations) {
             const cell = document.createElement('td');
             if (allocationsByTeamDate[team] && allocationsByTeamDate[team][date]) {
                 const alloc = allocationsByTeamDate[team][date];
+                cell.innerText = formatTime(alloc.start_time);
                 if (alloc.preferred) {
-                    cell.innerText = alloc.time;
                     cell.classList.add('preferred-time');
                     cell.title = 'Preferred Time';
-                } else {
-                    cell.innerText = alloc.time;
                 }
             } else {
                 cell.innerText = '-';
@@ -118,33 +118,25 @@ export function processStatistics(allocations) {
         timesTableBody.appendChild(row);
     });
 
-    // Structure allocations by team and date for Pitches
     // Populate Allocated Pitches Table
-    const allocationsByTeamDateForPitch = allocationsByTeamDate; // Same structure
-
-    // Create table headers with dates
-    const pitchesTableHead = document.querySelector('#pitches-table thead tr');
-    // Reuse existing dates, no need to recreate headers
-
+    const pitchesTableHead = pitchesTable.querySelector('thead tr');
     dates.forEach(date => {
         const th = document.createElement('th');
         th.innerText = date;
         pitchesTableHead.appendChild(th);
     });
 
-    // Populate table rows
     teamNames.forEach(team => {
         const row = document.createElement('tr');
-
         const teamCell = document.createElement('td');
         teamCell.innerText = team;
         row.appendChild(teamCell);
 
         dates.forEach(date => {
             const cell = document.createElement('td');
-            if (allocationsByTeamDateForPitch[team] && allocationsByTeamDateForPitch[team][date]) {
-                const alloc = allocationsByTeamDateForPitch[team][date];
-                cell.innerText = alloc.pitch;
+            if (allocationsByTeamDate[team] && allocationsByTeamDate[team][date]) {
+                const alloc = allocationsByTeamDate[team][date];
+                cell.innerText = alloc.pitch_name;
             } else {
                 cell.innerText = '-';
             }
@@ -155,15 +147,13 @@ export function processStatistics(allocations) {
     });
 
     // Populate Start Time Frequency Table
-    // Create headers with start times
-    const startTimeFreqTableHead = document.querySelector('#start-time-frequency-table thead tr');
+    const startTimeFreqTableHead = startTimeFreqTable.querySelector('thead tr');
     startTimes.forEach(time => {
         const th = document.createElement('th');
         th.innerText = time;
         startTimeFreqTableHead.appendChild(th);
     });
 
-    // Structure data for frequency
     const startTimeFrequency = {};
     teamNames.forEach(team => {
         startTimeFrequency[team] = {};
@@ -172,16 +162,15 @@ export function processStatistics(allocations) {
         });
     });
 
-    allocations.forEach(alloc => {
-        if (startTimeFrequency[alloc.team] && startTimeFrequency[alloc.team][alloc.time] !== undefined) {
-            startTimeFrequency[alloc.team][alloc.time]++;
+    filteredAllocations.forEach(alloc => {
+        const formattedTime = formatTime(alloc.start_time);
+        if (startTimeFrequency[alloc.team_name]) {
+            startTimeFrequency[alloc.team_name][formattedTime]++;
         }
     });
 
-    // Populate Start Time Frequency Table
     teamNames.forEach(team => {
         const row = document.createElement('tr');
-
         const teamCell = document.createElement('td');
         teamCell.innerText = team;
         row.appendChild(teamCell);
@@ -196,15 +185,13 @@ export function processStatistics(allocations) {
     });
 
     // Populate Pitch Usage Frequency Table
-    // Create headers with pitch names
-    const pitchUsageFreqTableHead = document.querySelector('#pitch-usage-frequency-table thead tr');
+    const pitchUsageFreqTableHead = pitchUsageFreqTable.querySelector('thead tr');
     pitchNames.forEach(pitch => {
         const th = document.createElement('th');
         th.innerText = pitch;
         pitchUsageFreqTableHead.appendChild(th);
     });
 
-    // Structure data for frequency
     const pitchUsageFrequency = {};
     teamNames.forEach(team => {
         pitchUsageFrequency[team] = {};
@@ -213,16 +200,14 @@ export function processStatistics(allocations) {
         });
     });
 
-    allocations.forEach(alloc => {
-        if (pitchUsageFrequency[alloc.team] && pitchUsageFrequency[alloc.team][alloc.pitch] !== undefined) {
-            pitchUsageFrequency[alloc.team][alloc.pitch]++;
+    filteredAllocations.forEach(alloc => {
+        if (pitchUsageFrequency[alloc.team_name]) {
+            pitchUsageFrequency[alloc.team_name][alloc.pitch_name]++;
         }
     });
 
-    // Populate Pitch Usage Frequency Table
     teamNames.forEach(team => {
         const row = document.createElement('tr');
-
         const teamCell = document.createElement('td');
         teamCell.innerText = team;
         row.appendChild(teamCell);

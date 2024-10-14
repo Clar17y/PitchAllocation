@@ -11,6 +11,7 @@ class Allocation(db.Model):
     pitch_id = db.Column(db.Integer, db.ForeignKey('Pitch.id'), nullable=False)
     team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=False)
     created = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
+    preferred = db.Column(db.Boolean, default=False)
 
     # Relationships with back_populates
     user = db.relationship('User', back_populates='allocations')
@@ -26,8 +27,11 @@ class Allocation(db.Model):
             'end_time': self.end_time.isoformat(),
             'user_id': self.user_id,
             'pitch_id': self.pitch_id,
-            'team_id': self.team_id
+            'team_id': self.team_id,
+            'preferred': self.preferred
         }
 
     def __str__(self):
-        return f"Allocation(id={self.id}, date={self.date}, time={self.time}, user_id={self.user_id}, pitch_id={self.pitch_id}, team_id={self.team_id})"
+        return (f"Allocation(id={self.id}, date={self.date}, start_time={self.start_time.strftime('%H:%M')}, "
+                f"end_time={self.end_time.strftime('%H:%M')}, user_id={self.user_id}, "
+                f"pitch_id={self.pitch_id}, team_id={self.team_id})")

@@ -1,6 +1,7 @@
 // frontend/players_config.js
 
 import { saveConfigData, deleteConfigData } from './api/configApi.js';
+import { initializeLogoutButton, loadCurrentUser, showAlert } from './shared.js';
 import { logMessage } from './utils/logger.js';
 import { fetchTeams, fetchPlayers } from './api/api.js';
 
@@ -9,38 +10,20 @@ const playersList = document.getElementById('players-list');
 const playerForm = document.getElementById('player-details-form');
 const createPlayerButton = document.getElementById('create-player-button');
 const teamsDropdown = document.getElementById('player-team');
-const toastContainer = document.getElementById('toast-container');
 let allPlayers = [];
 let allTeams = [];
-let currentUser = '';
 
 /**
  * Initialize the Players Configuration Page
  */
 document.addEventListener('DOMContentLoaded', async function() {
-    try {
-        const response = await fetch('/api/current_user', {
-            method: 'GET',
-            credentials: 'same-origin'  // Include cookies in the request
-        });
+    loadCurrentUser();
+    initializeLogoutButton();
 
-        if (response.status === 200) {
-            const data = await response.json();
-            document.getElementById('current-user-display').textContent = `Logged in as: ${data.name}`;
-            document.getElementById('logout-button').style.display = 'inline-block';
-            currentUser = data.name;
-        } else {
-            // Redirect to login if not authenticated
-            window.location.href = '/login.html';
-        }
-    } catch (error) {
-        console.error('Error fetching current user:', error);
-        window.location.href = '/login.html';
-    }
+    initializePlayersConfigPage();    
+});
 
-    document.getElementById('current-user-display').textContent = `Logged in as: ${currentUser}`;
-    document.getElementById('logout-button').style.display = 'inline-block';
-
+async function initializePlayersConfigPage() {
     await loadTeams();
     await loadPlayers();
 
@@ -49,10 +32,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Handle Create Player Button
     createPlayerButton.addEventListener('click', handleCreatePlayer);
-
-    // Handle Logout
-    document.getElementById('logout-button').addEventListener('click', handleLogout);
-});
+}
 
 
 /**
@@ -227,51 +207,4 @@ async function handleDeletePlayer(player) {
         logMessage(error.message, 'error');
         showAlert(`Error: ${error.message}`, 'danger');
     }
-}
-
-/**
- * Show Alert (Toast Notification)
- * @param {string} message 
- * @param {string} type - 'success', 'danger', 'warning', 'info'
- */
-function showAlert(message, type) {
-    const bgClass = {
-        'success': 'bg-success',
-        'danger': 'bg-danger',
-        'warning': 'bg-warning text-dark',
-        'info': 'bg-info'
-    }[type] || 'bg-secondary';
-
-    const toastEl = document.createElement('div');
-    toastEl.className = `toast align-items-center text-white ${bgClass} border-0`;
-    toastEl.setAttribute('role', 'alert');
-    toastEl.setAttribute('aria-live', 'assertive');
-    toastEl.setAttribute('aria-atomic', 'true');
-
-    toastEl.innerHTML = `
-        <div class="d-flex">
-            <div class="toast-body">
-                ${message}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-    `;
-
-    toastContainer.appendChild(toastEl);
-
-    // Initialize and show the toast
-    const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
-    toast.show();
-
-    // Remove the toast from DOM after it's hidden
-    toastEl.addEventListener('hidden.bs.toast', () => {
-        toastEl.remove();
-    });
-}
-
-/**
- * Handle Logout
- */
-function handleLogout() {
-    location.reload();
 }

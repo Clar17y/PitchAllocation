@@ -3,7 +3,8 @@
 import { fetchTeams, fetchPitches } from './api/api.js';
 import { saveConfigData, deleteConfigData } from './api/configApi.js';
 import { logMessage } from './utils/logger.js';
-import { eraseCookie } from './utils/cookie.js';
+import { initializeLogoutButton, loadCurrentUser, showAlert } from './shared.js';
+
 
 let currentUser = '';
 let allPitches = [];         // Stores all available pitches
@@ -11,29 +12,13 @@ let allTeams = [];
 let selectedOverlaps = [];   // Stores selected overlap pitch IDs
 
 document.addEventListener('DOMContentLoaded', async function() {
-    try {
-        const response = await fetch('/api/current_user', {
-            method: 'GET',
-            credentials: 'same-origin'  // Include cookies in the request
-        });
+    currentUser = loadCurrentUser();
+    initializeLogoutButton();
 
-        if (response.status === 200) {
-            const data = await response.json();
-            document.getElementById('current-user-display').textContent = `Logged in as: ${data.name}`;
-            document.getElementById('logout-button').style.display = 'inline-block';
-            currentUser = data.name;
-        } else {
-            // Redirect to login if not authenticated
-            window.location.href = '/login.html';
-        }
-    } catch (error) {
-        console.error('Error fetching current user:', error);
-        window.location.href = '/login.html';
-    }
+    initializeConfigPage();
+});
 
-    document.getElementById('current-user-display').textContent = `Logged in as: ${currentUser}`;
-    document.getElementById('logout-button').style.display = 'inline-block';
-
+function initializeConfigPage() {
     loadPitches();
     loadTeams();
 
@@ -49,13 +34,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('create-pitch-button').addEventListener('click', handleCreatePitch);
     document.getElementById('create-team-button').addEventListener('click', handleCreateTeam);
 
-    // Handle Logout
-    document.getElementById('logout-button').addEventListener('click', handleLogout);
-
     // Initialize Overlaps With multi-select functionality
     initializeOverlapsWith();
-});
-
+}
 
 /**
  * Load Pitches from Backend
@@ -491,62 +472,6 @@ function handleCreateTeam() {
     delete teamForm.dataset.editingId;
     showAlert('Create a new team by filling in the details and saving.', 'info');
 }
-
-
-/**
- * Handle Logout
- */
-function handleLogout() {
-    eraseCookie('username');
-    location.reload();
-}
-
-
-/**
- * Display Alert Messages as Toasts
- * @param {string} message - The message to display.
- * @param {string} type - Bootstrap toast background class: 'bg-success', 'bg-danger', 'bg-warning', 'bg-info'.
- */
-function showAlert(message, type) {
-    const toastContainer = document.getElementById('toast-container');
-    // Map alert types to Bootstrap background classes
-    const bgClasses = {
-        'success': 'bg-success',
-        'danger': 'bg-danger',
-        'warning': 'bg-warning',
-        'info': 'bg-info'
-    };
-
-    const bgClass = bgClasses[type] || 'bg-primary'; // Default to primary if type not found
-
-    // Create toast element
-    const toastEl = document.createElement('div');
-    toastEl.className = `toast align-items-center text-white ${bgClass} border-0`;
-    toastEl.setAttribute('role', 'alert');
-    toastEl.setAttribute('aria-live', 'assertive');
-    toastEl.setAttribute('aria-atomic', 'true');
-
-    toastEl.innerHTML = `
-        <div class="d-flex">
-            <div class="toast-body">
-                ${message}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-    `;
-
-    toastContainer.appendChild(toastEl);
-
-    // Initialize and show the toast
-    const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
-    toast.show();
-
-    // Remove the toast from DOM after it's hidden
-    toastEl.addEventListener('hidden.bs.toast', () => {
-        toastEl.remove();
-    });
-}
-
 
 /**
  * Handle Delete Item (Pitch or Team)
