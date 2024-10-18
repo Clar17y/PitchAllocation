@@ -5,6 +5,14 @@ from allocator.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+pitch_overlaps = db.Table(
+    'pitch_overlaps',
+    db.metadata,
+    db.Column('pitch_id_1', db.Integer, db.ForeignKey('Pitch.id'), primary_key=True),
+    db.Column('pitch_id_2', db.Integer, db.ForeignKey('Pitch.id'), primary_key=True),
+    schema='public'
+)
+
 class Pitch(db.Model):
     __tablename__ = 'Pitch'
 
@@ -13,15 +21,52 @@ class Pitch(db.Model):
     capacity = db.Column(db.Integer, nullable=False)
     location = db.Column(db.String(150), nullable=False)
     cost = db.Column(db.Float, default=0.0)
-    overlaps_with = db.Column(db.ARRAY(db.Integer), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user_login_info.id'), nullable=False)
     created = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
 
     allocations = db.relationship('Allocation', back_populates='pitch', lazy=True)
     owner = db.relationship('User', back_populates='pitches')
+    
+    # Define overlapping_pitches relationship for pitch_id_1
+    overlapping_pitches_1 = db.relationship(
+        'Pitch',
+        secondary=pitch_overlaps,
+        primaryjoin=id == pitch_overlaps.c.pitch_id_1,
+        secondaryjoin=id == pitch_overlaps.c.pitch_id_2,
+        backref=db.backref('overlapped_by_1', lazy='select'),
+        lazy='select'
+    )
+
+    # Define overlapping_pitches relationship for pitch_id_2
+    overlapping_pitches_2 = db.relationship(
+        'Pitch',
+        secondary=pitch_overlaps,
+        primaryjoin=id == pitch_overlaps.c.pitch_id_2,
+        secondaryjoin=id == pitch_overlaps.c.pitch_id_1,
+        backref=db.backref('overlapped_by_2', lazy='select'),
+        lazy='select'
+    )
+
+    @property
+    def all_overlapping_pitches(self):
+        """Combine overlapping_pitches_1 and overlapping_pitches_2."""
+        return list(set(self.overlapping_pitches_1 + self.overlapping_pitches_2))
 
     def format_label(self):
         return f"{self.capacity}aside - {self.name}"
+
+    def add_overlap(self, other_pitch):
+        if other_pitch not in self.all_overlapping_pitches:
+            self.overlapping_pitches_1.append(other_pitch)
+            logger.debug(f"Added overlap between Pitch {self.id} and Pitch {other_pitch.id}")
+
+    def remove_overlap(self, other_pitch):
+        if other_pitch in self.overlapping_pitches_1:
+            self.overlapping_pitches_1.remove(other_pitch)
+            logger.debug(f"Removed overlap between Pitch {self.id} and Pitch {other_pitch.id}")
+        elif other_pitch in self.overlapping_pitches_2:
+            self.overlapping_pitches_2.remove(other_pitch)
+            logger.debug(f"Removed overlap between Pitch {self.id} and Pitch {other_pitch.id}")
 
     def add_match(self, team, start_time, duration):
         """

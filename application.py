@@ -98,7 +98,6 @@ def duplicate_default_user_configurations(new_user_id):
                 capacity=pitch.capacity,
                 location=pitch.location,
                 cost=pitch.cost,
-                overlaps_with=pitch.overlaps_with, 
                 user_id=new_user_id
             )
             duplicated_pitches.append(new_pitch)
@@ -204,7 +203,7 @@ def get_pitches():
             'capacity': pitch.capacity,
             'location': pitch.location,
             'cost': pitch.cost,
-            'overlaps_with': pitch.overlaps_with,
+            'overlapping_pitches': [p.id for p in pitch.all_overlapping_pitches],
             'format_label': pitch.format_label()
         })
     return jsonify({'pitches': pitches_data})
@@ -477,6 +476,11 @@ def handle_config(config_type):
             elif config_type == 'pitches':
                 try:
                     new_item = pitch_schema.load(payload)
+                    overlapping_pitch_ids = payload.get('overlapping_pitch_ids', [])
+                    for overlap_id in overlapping_pitch_ids:
+                        overlapping_pitch = Pitch.query.get(overlap_id)
+                        if overlapping_pitch:
+                            new_item.add_overlap(overlapping_pitch)
                 except ValidationError as err:
                     return jsonify(err.messages), 400
             elif config_type == 'teams':
@@ -522,7 +526,7 @@ def handle_config(config_type):
 
             # Update the item
             try:
-                payload_without_id = {k: v for k, v in payload.items() if k != 'id'}
+                payload_without_id = {k: v for k, v in payload.items() if k != 'id' and k != 'overlapping_pitch_ids'}
                 if config_type == 'players':
                     updated_item = player_schema.load(payload_without_id, partial=True)
                 elif config_type == 'pitches':
@@ -534,6 +538,22 @@ def handle_config(config_type):
                 for attr, value in updated_item.__dict__.items():
                     if attr != '_sa_instance_state':  # Skip SQLAlchemy internal attribute
                         setattr(item, attr, value)
+
+                if config_type == 'pitches':
+                    # Handle overlapping pitches
+                    new_overlaps = set(payload.get('overlapping_pitch_ids', []))
+                    current_overlaps = set(p.id for p in item.all_overlapping_pitches)
+                    # Remove old overlaps
+                    for overlap_id in current_overlaps - new_overlaps:
+                        overlapping_pitch = Pitch.query.get(overlap_id)
+                        if overlapping_pitch:
+                            item.remove_overlap(overlapping_pitch)
+
+                    # Add new overlaps
+                    for overlap_id in new_overlaps - current_overlaps:
+                        overlapping_pitch = Pitch.query.get(overlap_id)
+                        if overlapping_pitch:
+                            item.add_overlap(overlapping_pitch)
 
                 db.session.commit()
                 logger.info(f"Updated {nonPluralConfigType} with ID {item_id}.")

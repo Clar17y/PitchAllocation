@@ -165,6 +165,7 @@ class Allocator:
     
     def allocate_remaining_teams(self, teams, start_time, end_of_day, specific_pitches=None):
         pitches_to_use = specific_pitches if specific_pitches else self.pitches
+        random.shuffle(pitches_to_use)
         sorted_pitches = sorted(pitches_to_use, key=lambda p: p.cost)
         # Add unallocated teams from allocate_preferred_teams to teams_to_allocate
         teams_to_allocate = set(teams) | set(self.unallocated_teams)
@@ -176,15 +177,22 @@ class Allocator:
                 if not teams_to_allocate:
                     break
 
-                teams_list = list(teams_to_allocate)
-                random.shuffle(teams_list)
-                for team in teams_list:
+                # Filter teams that are suitable for this pitch capacity
+                suitable_teams = [team for team in teams_to_allocate if get_pitch_type(team) == pitch.capacity]
+                if not suitable_teams:
+                    continue
+
+                random.shuffle(suitable_teams)
+                logger.info(f"Suitable teams for pitch {pitch.format_label()}: {[team.format_label() for team in suitable_teams]}")
+
+                if suitable_teams:
+                    team = suitable_teams[0]
+                    logger.info(f"Trying to allocate team {team.format_label()} to pitch {pitch.format_label()} at {start_time.strftime('%H:%M')}")
                     if self.try_allocate_team(team, start_time, end_of_day, pitch):
                         teams_to_allocate.remove(team)
                         allocated_this_slot = True
-                        break
-                if allocated_this_slot:
-                    break  # Move to next time slot after successful allocation
+                    else:
+                        logger.info(f"Failed to allocate {team.format_label()} to {pitch.format_label()} at {start_time.strftime('%H:%M')}. Skipping this pitch for this time slot.")
 
             if not allocated_this_slot:
                 logger.info(f"No allocations made at {start_time.strftime('%H:%M')}.")
@@ -214,17 +222,15 @@ class Allocator:
             if not self.is_pitch_available(pitch, start_time, duration):
                 continue
 
-            # Check overlapping pitches
-            if hasattr(pitch, 'overlaps_with') and pitch.overlaps_with:
-                overlapping = Pitch.query.filter(Pitch.id.in_(pitch.overlaps_with)).all()
-                overlap_conflict = False
-                for overlapping_pitch in overlapping:
-                    if not self.is_pitch_available(overlapping_pitch, start_time, duration):
-                        overlap_conflict = True
-                        logger.info(f"Cannot allocate {team.format_label()} to '{pitch.format_label()}' because overlapping pitch '{overlapping_pitch.format_label()}' is occupied at {start_time.strftime('%H:%M')}.")
-                        break
-                if overlap_conflict:
-                    continue
+            # Check overlapping pitches using all_overlapping_pitches
+            overlap_conflict = False
+            for overlapping_pitch in pitch.all_overlapping_pitches:
+                if not self.is_pitch_available(overlapping_pitch, start_time, duration):
+                    overlap_conflict = True
+                    logger.info(f"Cannot allocate {team.format_label()} to '{pitch.format_label()}' because overlapping pitch '{overlapping_pitch.format_label()}' is occupied at {start_time.strftime('%H:%M')}.")
+                    break
+            if overlap_conflict:
+                continue
 
             # Allocate the team to the pitch
             # Create a new Allocation record
@@ -252,14 +258,29 @@ class Allocator:
 
         return False
        
-    def is_pitch_available(self, pitch, start_time, duration):
+    def is_pitch_available(self, pitch, start_time, duration, checked_pitches=None):
+        if checked_pitches is None:
+            checked_pitches = set()
+
+        if pitch.id in checked_pitches:
+            return True  # We've already checked this pitch in this chain, so consider it available
+        
+        checked_pitches.add(pitch.id)
+
         end_time = start_time + duration
-        existing_allocations = Allocation.query.filter_by(pitch_id=pitch.id, date=self.date).all()
-        for alloc in existing_allocations:
-            alloc_start = alloc.start_time
-            alloc_end = alloc.end_time
-            if (start_time.time() < alloc_end and end_time.time() > alloc_start):
+        for alloc in self.allocations:
+            alloc_start = datetime.strptime(alloc['start_time'], "%I:%M%p").time()
+            alloc_end = datetime.strptime(alloc['end_time'], "%I:%M%p").time()
+            if (start_time.time() < alloc_end and end_time.time() > alloc_start and alloc['pitch'] == pitch.format_label()):
                 return False
+        
+        # Check overlapping pitches
+        for op in pitch.all_overlapping_pitches:                
+            if op.id == pitch.id:
+                continue
+            if not self.is_pitch_available(op, start_time, duration, checked_pitches):
+                return False
+
         return True
 
     def log_unallocated_teams(self):

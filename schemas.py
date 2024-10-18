@@ -1,4 +1,4 @@
-from marshmallow import Schema, fields, post_load, validates, ValidationError, EXCLUDE
+from marshmallow import Schema, fields, post_load, post_dump, validates, ValidationError, EXCLUDE
 from models.player import Player
 from models.pitch import Pitch
 from models.team import Team
@@ -34,9 +34,14 @@ class PitchSchema(Schema):
     capacity = fields.Int(required=True)
     location = fields.Str(required=True)
     cost = fields.Float()
-    overlaps_with = fields.List(fields.Int())
     user_id = fields.Int(dump_only=True)
     created = fields.DateTime(dump_only=True)
+    overlapping_pitch_ids = fields.Method("get_overlapping_pitch_ids", dump_only=True)
+
+    def get_overlapping_pitch_ids(self, obj):
+        if isinstance(obj, Pitch):
+            return [p.id for p in obj.all_overlapping_pitches]
+        return []
 
     class Meta:
         unknown = EXCLUDE

@@ -5,6 +5,7 @@ from models.player import Player
 from allocator.logger import setup_logger
 from flask_login import current_user
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import selectinload
 
 logger = setup_logger(__name__)
 
@@ -16,7 +17,11 @@ def load_pitches():
         raise PermissionError("User not authenticated.")
 
     try:
-        pitches = Pitch.query.filter_by(user_id=user_id).all()
+        pitches = Pitch.query.filter_by(user_id=current_user.id).options(
+            selectinload(Pitch.overlapping_pitches_1),
+            selectinload(Pitch.overlapping_pitches_2)
+        ).all()
+
         if not pitches:
             logger.warning(f"No pitches found for user_id {user_id}.")
         # Ensure that each Pitch instance has a 'format_label' method

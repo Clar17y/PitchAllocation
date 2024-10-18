@@ -176,12 +176,14 @@ function hideOverlapsDropdown() {
 /**
  * Update Overlaps Dropdown with Available Pitches
  */
-function updateOverlapsDropdown() {
+function updateOverlapsDropdown(currentPitchId) {
     const overlapsDropdown = document.getElementById('overlaps-dropdown');
     overlapsDropdown.innerHTML = ''; // Clear existing dropdown items
 
     // Filter available pitches (not already selected)
-    const availablePitches = allPitches.filter(pitch => !selectedOverlaps.includes(pitch.id));
+    const availablePitches = allPitches.filter(pitch => 
+        !selectedOverlaps.includes(pitch.id) && pitch.id !== parseInt(currentPitchId)
+    );
 
     if (availablePitches.length === 0) {
         const noOption = document.createElement('li');
@@ -197,8 +199,8 @@ function updateOverlapsDropdown() {
         option.dataset.id = pitch.id;
         option.addEventListener('click', () => {
             addOverlap(pitch.id, pitch.name);
-            overlapsInput.value = '';
-            overlapsInput.focus();
+            document.getElementById('pitch-overlaps-input').value = '';
+            document.getElementById('pitch-overlaps-input').focus();
         });
         overlapsDropdown.appendChild(option);
     });
@@ -233,7 +235,7 @@ function addOverlap(id, name) {
 
     selectedOverlaps.push(id);
     renderSelectedOverlaps();
-    updateOverlapsDropdown();
+    updateOverlapsDropdown(document.getElementById('pitch-id').value);
 }
 
 
@@ -246,7 +248,7 @@ function removeOverlap(id) {
     if (index > -1) {
         selectedOverlaps.splice(index, 1);
         renderSelectedOverlaps();
-        updateOverlapsDropdown();
+        updateOverlapsDropdown(document.getElementById('pitch-id').value);
     }
 }
 
@@ -286,6 +288,7 @@ function renderSelectedOverlaps() {
  * Display Pitch Details
  */
 function displayPitchDetails(pitch) {
+    console.log(pitch)
     document.getElementById('pitch-id').value = pitch.id;
     document.getElementById('pitch-name').value = pitch.name;
     document.getElementById('pitch-capacity').value = pitch.capacity;
@@ -294,7 +297,8 @@ function displayPitchDetails(pitch) {
     
     // Initialize selectedOverlaps based on pitch.overlaps_with
     // Assuming pitch.overlaps_with is an array of overlapping pitch IDs
-    selectedOverlaps = pitch.overlaps_with;
+    selectedOverlaps = pitch.overlapping_pitches || [];
+    console.log("selectedOverlaps: ", selectedOverlaps);
     
     renderSelectedOverlaps();
     updateOverlapsDropdown();
@@ -329,7 +333,7 @@ async function handlePitchFormSubmit(event) {
         capacity: parseInt(document.getElementById('pitch-capacity').value, 10),
         location: document.getElementById('pitch-location').value.trim(),
         cost: parseFloat(document.getElementById('pitch-cost').value) || 0,
-        overlaps_with: selectedOverlaps // Send array of selected overlap pitch IDs
+        overlapping_pitch_ids: selectedOverlaps
     };
 
     // Frontend Validation
