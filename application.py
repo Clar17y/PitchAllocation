@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for, flash, session
 from flask_login import login_user, current_user, logout_user, login_required
+from flask_mail import Mail, Message
 from models import db, bcrypt, login_manager, init_db
 from allocator.allocator_base import Allocator
 from allocator.config_loader import load_pitches, load_teams, load_players, save_players
@@ -15,11 +16,16 @@ from marshmallow import ValidationError
 from datetime import datetime, timedelta
 from db_utils import retry_on_db_error
 from allocator.utils import format_age_group
+import re
+from itsdangerous import URLSafeTimedSerializer
+
 application = Flask(__name__)
 application.config.from_object('config.Config')
 application.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
 application.config['SESSION_REFRESH_EACH_REQUEST'] = True
 logger = setup_logger(__name__)
+
+mail = Mail(application)
 
 # Initialize extensions
 init_db(application)
@@ -41,19 +47,25 @@ def register():
     if current_user.is_authenticated:
         return redirect(url_for('serve_index'))
     if request.method == 'POST':
-        name = request.form.get('username')
+        username = request.form.get('username').strip()
+        email = request.form.get('email').strip()
         password = request.form.get('password')
-        
-        if not name or not password:
-            flash('Please fill out both fields.', 'warning')
+        confirm_password = request.form.get('confirm_password')
+
+        # Validate inputs (length, complexity, etc.)
+
+        if password != confirm_password:
+            flash('Passwords do not match.', 'danger')
             return redirect(url_for('register'))
-        
-        existing_user = User.query.filter_by(name=name).first()
-        if existing_user:
-            flash('Username already exists. Please choose a different one.', 'danger')
+
+        # Check if user exists
+        user = User.query.filter((User.email == email) | (User.name == username)).first()
+        if user:
+            flash('Username or email already exists.', 'danger')
             return redirect(url_for('register'))
-        
-        new_user = User(name=name)
+
+        # Create new user
+        new_user = User(name=username, email=email)
         new_user.set_password(password)
         try:
             db.session.add(new_user)
@@ -131,8 +143,12 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('serve_index'))
     if request.method == 'POST':
-        name = request.form.get('username')
-        password = request.form.get('password')
+        name = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        if not name or not password:
+            flash('Please enter both username and password.', 'danger')
+            return redirect(url_for('login'))
         
         user = User.query.filter_by(name=name).first()
         if user and user.check_password(password):
@@ -144,6 +160,111 @@ def login():
             flash('Login Unsuccessful. Please check username and password.', 'danger')
     
     return render_template('login.html')
+
+@application.route('/change_password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    if request.method == 'POST':
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_new_password = request.form.get('confirm_new_password')
+        
+        # Verify current password
+        if not current_user.check_password(current_password):
+            flash('Current password is incorrect.', 'danger')
+            return redirect(url_for('change_password'))
+        
+        # Check if new passwords match
+        if new_password != confirm_new_password:
+            flash('New passwords do not match.', 'danger')
+            return redirect(url_for('change_password'))
+        
+        # Check password complexity
+        if not is_password_complex(new_password):
+            flash('New password does not meet complexity requirements.', 'danger')
+            return redirect(url_for('change_password'))
+        
+        # Update password
+        current_user.set_password(new_password)
+        db.session.commit()
+        flash('Your password has been updated!', 'success')
+        return redirect(url_for('profile'))  # Redirect to a profile or dashboard page
+    
+    return render_template('change_password.html')
+
+def generate_reset_token(email):
+    serializer = URLSafeTimedSerializer(application.config['SECRET_KEY'])
+    return serializer.dumps(email, salt='password-reset-salt')
+
+def confirm_reset_token(token, expiration=3600):
+    serializer = URLSafeTimedSerializer(application.config['SECRET_KEY'])
+    try:
+        email = serializer.loads(
+            token,
+            salt='password-reset-salt',
+            max_age=expiration
+        )
+    except Exception:
+        return False
+    return email
+
+@application.route('/reset_password', methods=['GET', 'POST'])
+def reset_password_request():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        user = User.query.filter_by(email=email).first()
+        if user:
+            token = generate_reset_token(user.email)
+            reset_url = url_for('reset_password', token=token, _external=True)
+            # Send email
+            msg = Message('Password Reset Request',
+                          recipients=[user.email])
+            msg.body = f'''To reset your password for OWPitchAlloc, visit the following link:
+{reset_url}
+
+If you did not make this request then simply ignore this email.
+'''
+            mail.send(msg)
+            flash('A password reset link has been sent to your email.', 'info')
+            return redirect(url_for('login'))
+        else:
+            flash('Email address not found.', 'danger')
+    return render_template('reset_password_request.html')
+
+@application.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    email = confirm_reset_token(token)
+    if not email:
+        flash('The reset link is invalid or has expired.', 'danger')
+        return redirect(url_for('reset_password_request'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if password != confirm_password:
+            flash('Passwords do not match.', 'danger')
+            return redirect(url_for('reset_password', token=token))
+        
+        if not is_password_complex(password):
+            flash('Password does not meet complexity requirements.', 'danger')
+            return redirect(url_for('reset_password', token=token))
+        
+        user = User.query.filter_by(email=email).first()
+        if user:
+            if bcrypt.check_password_hash(user.password_hash, password):
+                flash('The new password cannot be the same as the old password.', 'danger')
+                return redirect(url_for('reset_password', token=token))
+            
+            user.set_password(password)
+            db.session.commit()
+            flash('Your password has been updated!', 'success')
+            return redirect(url_for('login'))
+        else:
+            flash('User not found.', 'danger')
+            return redirect(url_for('reset_password_request'))
+    
+    return render_template('reset_password.html', token=token)
 
 @application.route('/api/current_user', methods=['GET'])
 @login_required
@@ -604,6 +725,11 @@ def register_page():
 @application.route('/login.html')
 def login_page():
     return render_template('login.html')
+
+def is_password_complex(password):
+    """Check if the password meets complexity requirements."""
+    pattern = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$')
+    return pattern.match(password)
 
 def generate_unique_id(items):
     """Generate a unique ID for a new item."""

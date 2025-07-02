@@ -101,8 +101,8 @@ class AllocationSchema(Schema):
 class UserSchema(Schema):
     id = fields.Int(dump_only=True)
     name = fields.Str(required=True)
-    hash = fields.Str(dump_only=True)
-    salt = fields.Str(dump_only=True)
+    password_hash = fields.Str(dump_only=True)
+    email = fields.Str(required=True)
     created = fields.DateTime(dump_only=True)
 
     @post_load

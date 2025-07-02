@@ -11,8 +11,8 @@ class User(UserMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False, unique=True)
-    hash = db.Column(db.String(128), nullable=False)
-    salt = db.Column(db.String(128), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128), nullable=False)
     created = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
 
     # Relationships with back_populates
@@ -22,8 +22,13 @@ class User(UserMixin, db.Model):
     allocations = relationship('Allocation', back_populates='user', lazy=True)
 
     def set_password(self, password):
-        self.salt = bcrypt.generate_password_hash(password).decode('utf-8')
-        self.hash = bcrypt.generate_password_hash(password + self.salt).decode('utf-8')
+        """
+        Hashes the password using bcrypt and stores it in password_hash.
+        """
+        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
 
     def check_password(self, password):
-        return bcrypt.check_password_hash(self.hash, password + self.salt)
+        """
+        Checks the provided password against the stored hash.
+        """
+        return bcrypt.check_password_hash(self.password_hash, password)
