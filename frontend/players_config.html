@@ -118,11 +118,15 @@
                     </div>
                     <div class="mb-3">
                         <label for="player-first-name" class="form-label">First Name</label>
-                        <input type="text" class="form-control" id="player-first-name" maxlength="50" required pattern="[a-zA-Z\s\-]{1,50}" title="Letters, spaces, and hyphens only, up to 50 characters.">
+                        <input type="text" class="form-control" id="player-first-name" 
+                            maxlength="50" required 
+                            pattern="[a-zA-Z0-9\s\-']{1,50}" 
+                            title="Letters, numbers, spaces, hyphens, and apostrophes only, up to 50 characters.">
                     </div>
                     <div class="mb-3">
                         <label for="player-surname" class="form-label">Surname</label>
-                        <input type="text" class="form-control" id="player-surname" maxlength="50" required pattern="[a-zA-Z\s\-]{1,50}" title="Letters, spaces, and hyphens only, up to 50 characters.">
+                        <input type="text" class="form-control" id="player-surname" maxlength="50" required pattern="[a-zA-Z0-9\s\-']{1,50}" 
+                        title="Letters, numbers, spaces, hyphens, and apostrophes only, up to 50 characters.">
                     </div>
                     <div class="mb-3">
                         <label for="player-team" class="form-label">Team</label>

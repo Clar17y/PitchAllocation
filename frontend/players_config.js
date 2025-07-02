@@ -1,31 +1,29 @@
 // frontend/players_config.js
 
-import { fetchConfigData, saveConfigData, deleteConfigData } from './api/configApi.js';
+import { saveConfigData, deleteConfigData } from './api/configApi.js';
+import { initializeLogoutButton, loadCurrentUser, showAlert } from './shared.js';
 import { logMessage } from './utils/logger.js';
+import { fetchTeams, fetchPlayers } from './api/api.js';
 
 // DOM Elements
 const playersList = document.getElementById('players-list');
 const playerForm = document.getElementById('player-details-form');
 const createPlayerButton = document.getElementById('create-player-button');
 const teamsDropdown = document.getElementById('player-team');
-const toastContainer = document.getElementById('toast-container');
 let allPlayers = [];
 let allTeams = [];
 
 /**
  * Initialize the Players Configuration Page
  */
-document.addEventListener('DOMContentLoaded', async () => {
-    const username = getCookie('username');
-    if (!username) {
-        alert('User not logged in. Redirecting to login.');
-        location.href = '/';
-        return;
-    }
+document.addEventListener('DOMContentLoaded', async function() {
+    loadCurrentUser();
+    initializeLogoutButton();
 
-    document.getElementById('current-user-display').textContent = `Logged in as: ${username}`;
-    document.getElementById('logout-button').style.display = 'inline-block';
+    initializePlayersConfigPage();    
+});
 
+async function initializePlayersConfigPage() {
     await loadTeams();
     await loadPlayers();
 
@@ -34,10 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Handle Create Player Button
     createPlayerButton.addEventListener('click', handleCreatePlayer);
-
-    // Handle Logout
-    document.getElementById('logout-button').addEventListener('click', handleLogout);
-});
+}
 
 
 /**
@@ -45,7 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
  */
 async function loadTeams() {
     try {
-        const data = await fetchConfigData('teams', 'get', { username: getCookie('username') });
+        const data = await fetchTeams();
         allTeams = data.teams;
         populateTeamsDropdown();
     } catch (error) {
@@ -71,7 +66,7 @@ function populateTeamsDropdown() {
  */
 async function loadPlayers() {
     try {
-        const data = await fetchConfigData('players', 'get', { username: getCookie('username') });
+        const data = await fetchPlayers();
         allPlayers = data.players;
         displayPlayers();
     } catch (error) {
@@ -136,7 +131,6 @@ function populatePlayerForm(player) {
  */
 async function handlePlayerFormSubmit(event) {
     event.preventDefault();
-    const username = getCookie('username');
 
     const playerId = playerForm.dataset.editingId ? parseInt(playerForm.dataset.editingId) : null;
     const firstName = document.getElementById('player-first-name').value.trim();
@@ -195,13 +189,12 @@ function handleCreatePlayer() {
  * @param {object} player 
  */
 async function handleDeletePlayer(player) {
-    const username = getCookie('username');
     if (!confirm(`Are you sure you want to delete ${player.first_name} ${player.surname}?`)) {
         return;
     }
 
     try {
-        await deleteConfigData('players', 'delete', { username: username, id: player.id });
+        await deleteConfigData('players', 'delete', { id: player.id });
         showAlert('Player deleted successfully.', 'success');
         await loadPlayers();
 
@@ -214,73 +207,4 @@ async function handleDeletePlayer(player) {
         logMessage(error.message, 'error');
         showAlert(`Error: ${error.message}`, 'danger');
     }
-}
-
-/**
- * Show Alert (Toast Notification)
- * @param {string} message 
- * @param {string} type - 'success', 'danger', 'warning', 'info'
- */
-function showAlert(message, type) {
-    const bgClass = {
-        'success': 'bg-success',
-        'danger': 'bg-danger',
-        'warning': 'bg-warning text-dark',
-        'info': 'bg-info'
-    }[type] || 'bg-secondary';
-
-    const toastEl = document.createElement('div');
-    toastEl.className = `toast align-items-center text-white ${bgClass} border-0`;
-    toastEl.setAttribute('role', 'alert');
-    toastEl.setAttribute('aria-live', 'assertive');
-    toastEl.setAttribute('aria-atomic', 'true');
-
-    toastEl.innerHTML = `
-        <div class="d-flex">
-            <div class="toast-body">
-                ${message}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-    `;
-
-    toastContainer.appendChild(toastEl);
-
-    // Initialize and show the toast
-    const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
-    toast.show();
-
-    // Remove the toast from DOM after it's hidden
-    toastEl.addEventListener('hidden.bs.toast', () => {
-        toastEl.remove();
-    });
-}
-
-/**
- * Handle Logout
- */
-function handleLogout() {
-    eraseCookie('username');
-    location.reload();
-}
-
-
-/**
- * Get Cookie by Name
- * @param {string} name 
- * @returns {string|null}
- */
-function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
-}
-
-/**
- * Erase Cookie by Name
- * @param {string} name 
- */
-function eraseCookie(name) {   
-    document.cookie = `${name}=; Max-Age=-99999999;`;  
 }

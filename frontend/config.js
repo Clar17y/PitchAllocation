@@ -3,24 +3,22 @@
 import { fetchTeams, fetchPitches } from './api/api.js';
 import { saveConfigData, deleteConfigData } from './api/configApi.js';
 import { logMessage } from './utils/logger.js';
-import { getCookie, eraseCookie } from './utils/cookie.js';
+import { initializeLogoutButton, loadCurrentUser, showAlert } from './shared.js';
+
 
 let currentUser = '';
 let allPitches = [];         // Stores all available pitches
 let allTeams = [];
 let selectedOverlaps = [];   // Stores selected overlap pitch IDs
 
-document.addEventListener('DOMContentLoaded', function() {
-    currentUser = getCookie('username');
-    if (!currentUser) {
-        alert('User not logged in. Redirecting to login.');
-        location.href = '/';
-        return;
-    }
+document.addEventListener('DOMContentLoaded', async function() {
+    currentUser = loadCurrentUser();
+    initializeLogoutButton();
 
-    document.getElementById('current-user-display').textContent = `Logged in as: ${currentUser}`;
-    document.getElementById('logout-button').style.display = 'inline-block';
+    initializeConfigPage();
+});
 
+function initializeConfigPage() {
     loadPitches();
     loadTeams();
 
@@ -36,20 +34,16 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('create-pitch-button').addEventListener('click', handleCreatePitch);
     document.getElementById('create-team-button').addEventListener('click', handleCreateTeam);
 
-    // Handle Logout
-    document.getElementById('logout-button').addEventListener('click', handleLogout);
-
     // Initialize Overlaps With multi-select functionality
     initializeOverlapsWith();
-});
-
+}
 
 /**
  * Load Pitches from Backend
  */
 async function loadPitches() {
     try {
-        const data = await fetchPitches(currentUser);
+        const data = await fetchPitches();
         allPitches = data.pitches; // Store all pitches
 
         allPitches.sort((a,b) => a.capacity - b.capacity);
@@ -67,7 +61,7 @@ async function loadPitches() {
  */
 async function loadTeams() {
     try {
-        const data = await fetchTeams(currentUser);
+        const data = await fetchTeams();
         allTeams = data.teams;
 
         // Sort teams by age_group
@@ -182,12 +176,14 @@ function hideOverlapsDropdown() {
 /**
  * Update Overlaps Dropdown with Available Pitches
  */
-function updateOverlapsDropdown() {
+function updateOverlapsDropdown(currentPitchId) {
     const overlapsDropdown = document.getElementById('overlaps-dropdown');
     overlapsDropdown.innerHTML = ''; // Clear existing dropdown items
 
     // Filter available pitches (not already selected)
-    const availablePitches = allPitches.filter(pitch => !selectedOverlaps.includes(pitch.id));
+    const availablePitches = allPitches.filter(pitch => 
+        !selectedOverlaps.includes(pitch.id) && pitch.id !== parseInt(currentPitchId)
+    );
 
     if (availablePitches.length === 0) {
         const noOption = document.createElement('li');
@@ -203,8 +199,8 @@ function updateOverlapsDropdown() {
         option.dataset.id = pitch.id;
         option.addEventListener('click', () => {
             addOverlap(pitch.id, pitch.name);
-            overlapsInput.value = '';
-            overlapsInput.focus();
+            document.getElementById('pitch-overlaps-input').value = '';
+            document.getElementById('pitch-overlaps-input').focus();
         });
         overlapsDropdown.appendChild(option);
     });
@@ -239,7 +235,7 @@ function addOverlap(id, name) {
 
     selectedOverlaps.push(id);
     renderSelectedOverlaps();
-    updateOverlapsDropdown();
+    updateOverlapsDropdown(document.getElementById('pitch-id').value);
 }
 
 
@@ -252,7 +248,7 @@ function removeOverlap(id) {
     if (index > -1) {
         selectedOverlaps.splice(index, 1);
         renderSelectedOverlaps();
-        updateOverlapsDropdown();
+        updateOverlapsDropdown(document.getElementById('pitch-id').value);
     }
 }
 
@@ -292,6 +288,7 @@ function renderSelectedOverlaps() {
  * Display Pitch Details
  */
 function displayPitchDetails(pitch) {
+    console.log(pitch)
     document.getElementById('pitch-id').value = pitch.id;
     document.getElementById('pitch-name').value = pitch.name;
     document.getElementById('pitch-capacity').value = pitch.capacity;
@@ -300,7 +297,8 @@ function displayPitchDetails(pitch) {
     
     // Initialize selectedOverlaps based on pitch.overlaps_with
     // Assuming pitch.overlaps_with is an array of overlapping pitch IDs
-    selectedOverlaps = pitch.overlaps_with;
+    selectedOverlaps = pitch.overlapping_pitches || [];
+    console.log("selectedOverlaps: ", selectedOverlaps);
     
     renderSelectedOverlaps();
     updateOverlapsDropdown();
@@ -317,7 +315,7 @@ function displayTeamDetails(team) {
     document.getElementById('team-id').value = team.id;
     document.getElementById('team-name').value = team.name;
     document.getElementById('team-age-group').value = team.age_group;
-    document.getElementById('team-gender').value = team.gender;
+    document.getElementById('team-gender').value = team.is_girls ? 'Girls' : 'Boys';
     // Store current editing team ID
     document.getElementById('team-details-form').dataset.editingId = team.id;
 }
@@ -335,7 +333,7 @@ async function handlePitchFormSubmit(event) {
         capacity: parseInt(document.getElementById('pitch-capacity').value, 10),
         location: document.getElementById('pitch-location').value.trim(),
         cost: parseFloat(document.getElementById('pitch-cost').value) || 0,
-        overlaps_with: selectedOverlaps // Send array of selected overlap pitch IDs
+        overlapping_pitch_ids: selectedOverlaps
     };
 
     // Frontend Validation
@@ -407,7 +405,7 @@ async function handleTeamFormSubmit(event) {
     const newTeamData = {
         name: document.getElementById('team-name').value.trim().toUpperCase(),
         age_group: document.getElementById('team-age-group').value.trim(),
-        gender: document.getElementById('team-gender').value
+        is_girls: document.getElementById('team-gender').value === 'Girls'
     };
 
     // Frontend Validation
@@ -478,62 +476,6 @@ function handleCreateTeam() {
     delete teamForm.dataset.editingId;
     showAlert('Create a new team by filling in the details and saving.', 'info');
 }
-
-
-/**
- * Handle Logout
- */
-function handleLogout() {
-    eraseCookie('username');
-    location.reload();
-}
-
-
-/**
- * Display Alert Messages as Toasts
- * @param {string} message - The message to display.
- * @param {string} type - Bootstrap toast background class: 'bg-success', 'bg-danger', 'bg-warning', 'bg-info'.
- */
-function showAlert(message, type) {
-    const toastContainer = document.getElementById('toast-container');
-    // Map alert types to Bootstrap background classes
-    const bgClasses = {
-        'success': 'bg-success',
-        'danger': 'bg-danger',
-        'warning': 'bg-warning',
-        'info': 'bg-info'
-    };
-
-    const bgClass = bgClasses[type] || 'bg-primary'; // Default to primary if type not found
-
-    // Create toast element
-    const toastEl = document.createElement('div');
-    toastEl.className = `toast align-items-center text-white ${bgClass} border-0`;
-    toastEl.setAttribute('role', 'alert');
-    toastEl.setAttribute('aria-live', 'assertive');
-    toastEl.setAttribute('aria-atomic', 'true');
-
-    toastEl.innerHTML = `
-        <div class="d-flex">
-            <div class="toast-body">
-                ${message}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-    `;
-
-    toastContainer.appendChild(toastEl);
-
-    // Initialize and show the toast
-    const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
-    toast.show();
-
-    // Remove the toast from DOM after it's hidden
-    toastEl.addEventListener('hidden.bs.toast', () => {
-        toastEl.remove();
-    });
-}
-
 
 /**
  * Handle Delete Item (Pitch or Team)
@@ -624,7 +566,7 @@ function formatPitchLabel(pitch) {
  * @returns {string}
  */
 function formatTeamLabel(team) {
-    return `${team.age_group} ${team.name}` + (team.gender === 'Girls' ? ` (Girls)` : ``)
+    return `${team.age_group} ${team.name}` + (team.is_girls  ? ` (Girls)` : ``)
 }
 
 /**
@@ -657,13 +599,11 @@ function validateTeamData(data, editingId) {
     // Limit lengths
     if (data.name.length > 50) return 'Team name must be 50 characters or fewer.';
     if (data.age_group.length > 20) return 'Age group must be 20 characters or fewer.';
-    if (data.gender.length > 10) return 'Gender must be 10 characters or fewer.';
 
     // Alphanumeric checks (allowing spaces, hyphens, underscores and brackets)
     const alphaNumRegex = /^[a-zA-Z0-9\s()_-]+$/;
     if (!alphaNumRegex.test(data.name)) return 'Team name contains invalid characters.';
     if (!alphaNumRegex.test(data.age_group)) return 'Age group contains invalid characters.';
-    if (!alphaNumRegex.test(data.gender)) return 'Gender contains invalid characters.';
 
     return null; // No errors
 }

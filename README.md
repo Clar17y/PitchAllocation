@@ -13,6 +13,17 @@ Create a UI for the project in Python
 **Step 4**:
 Change it into a website that can be used by members of the grassroots team from their mobile
 
+**Step 5:**
+Deploy it to AWS
+
+**Step 6:**
+Update the code to use S3 for storage, implement user specific functionality
+
+**Step 7:**
+Add the ability for each user to customise the allocation process (add/remove pitches, change costs, change capacities)
+
+**Step 8:**
+Move to Postgres for storage
 
 
 
